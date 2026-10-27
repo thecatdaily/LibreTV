@@ -102,27 +102,51 @@ window.createMobileFullscreenControls = function createMobileFullscreenControls(
     }
 
     function onStart(event) {
-        if (!active || event.touches.length !== 1 || event.target.closest('button, input, .art-controls, .art-setting, .player-top-actions, .player-episode-drawer, .player-next-card')) return;
+        if (!active || event.touches.length !== 1 || event.target.closest('button, input, .art-controls, .art-setting, .player-top-actions, .player-episode-drawer, .player-next-card, .player-shortcut-help')) return;
         const touch = event.touches[0];
         const bounds = player.getBoundingClientRect();
         gesture = {
             x: touch.clientX, y: touch.clientY, side: touch.clientX < bounds.left + bounds.width / 2 ? 'brightness' : 'volume',
             initial: touch.clientX < bounds.left + bounds.width / 2 ? brightness : Math.round(video.volume * 100),
-            height: Math.max(bounds.height, 1), moved: false
+            height: Math.max(bounds.height, 1), width: Math.max(bounds.width, 1), moved: false,
+            mode: null, startTime: video.currentTime || 0, seekTarget: null
         };
     }
 
     function onMove(event) {
         if (!active || !gesture || event.touches.length !== 1) return;
+        // 全屏手势由这里统一处理；不让 Artplayer 自带的滑动调进度再收到移动事件，否则松手时会把进度改回去
+        event.stopPropagation();
         const touch = event.touches[0];
         const dx = touch.clientX - gesture.x;
         const dy = touch.clientY - gesture.y;
         if (!gesture.moved) {
-            if (Math.abs(dy) < 12 || Math.abs(dy) < Math.abs(dx) * 1.15) return;
+            // 横向滑动拖动进度，纵向滑动左侧调亮度、右侧调音量
+            if (Math.abs(dx) >= 12 && Math.abs(dx) > Math.abs(dy) * 1.15) {
+                gesture.mode = 'seek';
+            } else if (Math.abs(dy) >= 12 && Math.abs(dy) >= Math.abs(dx) * 1.15) {
+                gesture.mode = 'level';
+            } else {
+                return;
+            }
             gesture.moved = true;
         }
         event.preventDefault();
         event.stopPropagation();
+        if (gesture.mode === 'seek') {
+            const duration = Number.isFinite(video.duration) ? video.duration : 0;
+            if (!duration) return;
+            const target = window.PlayerEnhancements
+                ? window.PlayerEnhancements.swipeSeekTarget(gesture.startTime, dx, gesture.width, duration)
+                : Math.max(0, Math.min(duration, gesture.startTime + dx / gesture.width * Math.min(120, duration)));
+            gesture.seekTarget = target;
+            const offset = Math.round(target - gesture.startTime);
+            levelLabel.textContent = `${formatTime(target)} / ${formatTime(duration)}（${offset >= 0 ? '+' : '-'}${Math.abs(offset)} 秒）`;
+            levelFill.style.width = `${target / duration * 100}%`;
+            level.classList.add('visible');
+            clearTimeout(levelTimer);
+            return;
+        }
         const amount = Math.max(0, Math.min(100, gesture.initial - dy / gesture.height * 100));
         if (gesture.side === 'brightness') {
             brightness = amount;
@@ -142,6 +166,11 @@ window.createMobileFullscreenControls = function createMobileFullscreenControls(
     }
 
     function onEnd(event) {
+        if (gesture?.mode === 'seek' && gesture.seekTarget !== null) {
+            video.currentTime = gesture.seekTarget;
+            levelTimer = setTimeout(() => level.classList.remove('visible'), 600);
+            update();
+        }
         if (gesture?.moved) {
             event.preventDefault();
             event.stopPropagation();

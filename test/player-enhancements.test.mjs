@@ -167,3 +167,60 @@ test('skip, preload and countdown ignore the previous episode time until new met
   assert.match(playerHtml, /id="sideEpisodes"/);
   assert.match(styles, /\.player-stage\.has-side-episodes/);
 });
+
+test('keyboard shortcuts map to player actions and leave browser shortcuts alone', async () => {
+  const { api } = await setup();
+  const act = (key, extra = {}) => {
+    const action = api.shortcutAction({ key, ...extra });
+    return action ? { ...action } : null;
+  };
+  assert.deepEqual(act(' '), { type: 'toggle' });
+  assert.deepEqual(act('K'), { type: 'toggle' });
+  assert.deepEqual(act('j'), { type: 'seek', delta: -10 });
+  assert.deepEqual(act('l'), { type: 'seek', delta: 10 });
+  assert.deepEqual(act('ArrowRight'), { type: 'seek-forward-hold' });
+  assert.deepEqual(act('m'), { type: 'mute' });
+  assert.deepEqual(act('n'), { type: 'episode', delta: 1 });
+  assert.deepEqual(act('p'), { type: 'episode', delta: -1 });
+  assert.deepEqual(act(']'), { type: 'rate', delta: 1 });
+  assert.deepEqual(act('<'), { type: 'rate', delta: -1 });
+  assert.deepEqual(act('7'), { type: 'seek-percent', value: 70 });
+  assert.deepEqual(act('?'), { type: 'help' });
+  assert.deepEqual(act('Enter', { altKey: true }), { type: 'fullscreen' });
+  assert.deepEqual(act('ArrowRight', { altKey: true }), { type: 'episode', delta: 1 });
+  // Ctrl/Cmd combinations (copy, reload, find…) belong to the browser.
+  assert.equal(act('r', { ctrlKey: true }), null);
+  assert.equal(act('f', { metaKey: true }), null);
+  assert.equal(act('x'), null);
+
+  assert.equal(api.stepRate(1, 1), 1.25);
+  assert.equal(api.stepRate(1, -1), 0.75);
+  assert.equal(api.stepRate(3, 1), 3);
+  assert.equal(api.stepRate(0.5, -1), 0.5);
+  assert.equal(api.stepRate(1.1, 1), 1.25);
+});
+
+test('touch gestures: double-tap zones and swipe seeking', async () => {
+  const { api } = await setup();
+  const rect = { left: 0, width: 300 };
+  assert.equal(api.doubleTapZone(50, rect), 'back');
+  assert.equal(api.doubleTapZone(150, rect), 'center');
+  assert.equal(api.doubleTapZone(260, rect), 'forward');
+  // A full-width swipe covers up to two minutes and never leaves the video.
+  assert.equal(api.swipeSeekTarget(100, 150, 300, 2700), 160);
+  assert.equal(api.swipeSeekTarget(10, -300, 300, 2700), 0);
+  assert.equal(api.swipeSeekTarget(50, 300, 300, 60), 59.5);
+});
+
+test('saved progress is restored once per load so later seeks are not pulled back', async () => {
+  const player = await read('js/player.js');
+  const mobile = await read('js/mobile-fullscreen.js');
+  const start = player.indexOf('function restorePlaybackPosition');
+  const body = player.slice(start, player.indexOf('\n}\n', start));
+  assert.match(body, /if \(Number\.isFinite\(duration\) && duration > 0\) playbackRestoreApplied = true;/);
+  // Long press follows the player node into Artplayer's fullscreen layer.
+  assert.match(player, /const playerElement = art\.template\?\.\$player \|\| document\.getElementById\('player'\);/);
+  // Fullscreen swipes are not also handled by Artplayer's built-in seek gesture.
+  assert.match(mobile, /event\.stopPropagation\(\);\n\s*const touch = event\.touches\[0\];/);
+  assert.match(player, /document\.addEventListener\('keyup', handleKeyboardShortcutRelease\)/);
+});

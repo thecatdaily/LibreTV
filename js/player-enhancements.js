@@ -342,6 +342,104 @@
         return warmed;
     }
 
+    // ---- Keyboard shortcuts ----
+    // Returns the action for a keydown, or null to let the browser handle it.
+    function shortcutAction(event) {
+        if (!event || event.ctrlKey || event.metaKey) return null;
+        const key = event.key;
+        if (event.altKey) {
+            if (key === 'Enter') return { type: 'fullscreen' };
+            if (key === 'ArrowLeft') return { type: 'episode', delta: -1 };
+            if (key === 'ArrowRight') return { type: 'episode', delta: 1 };
+            return null;
+        }
+        if (/^[0-9]$/.test(key)) return { type: 'seek-percent', value: Number(key) * 10 };
+        switch (key.length === 1 ? key.toLowerCase() : key) {
+            case ' ':
+            case 'k': return { type: 'toggle' };
+            case 'ArrowLeft': return { type: 'seek', delta: -5 };
+            case 'ArrowRight': return { type: 'seek-forward-hold' };
+            case 'j': return { type: 'seek', delta: -10 };
+            case 'l': return { type: 'seek', delta: 10 };
+            case 'ArrowUp': return { type: 'volume', delta: 0.1 };
+            case 'ArrowDown': return { type: 'volume', delta: -0.1 };
+            case 'm': return { type: 'mute' };
+            case 'n': return { type: 'episode', delta: 1 };
+            case 'p': return { type: 'episode', delta: -1 };
+            case '[':
+            case '<': return { type: 'rate', delta: -1 };
+            case ']':
+            case '>': return { type: 'rate', delta: 1 };
+            case 'f': return { type: 'fullscreen' };
+            case 'w': return { type: 'web-fullscreen' };
+            case '?': return { type: 'help' };
+            case 'Escape': return { type: 'escape' };
+            default: return null;
+        }
+    }
+
+    function stepRate(current, delta) {
+        const rates = PLAYBACK_RATES;
+        const index = rates.indexOf(Number(current));
+        const base = index >= 0 ? index : rates.indexOf(1);
+        return rates[Math.max(0, Math.min(rates.length - 1, base + delta))];
+    }
+
+    const SHORTCUT_HELP = [
+        ['空格 / K', '播放 / 暂停'],
+        ['← / →', '快退 / 快进 5 秒'],
+        ['按住 →', '3 倍速播放'],
+        ['J / L', '快退 / 快进 10 秒'],
+        ['↑ / ↓', '音量'],
+        ['M', '静音'],
+        ['N / P', '下一集 / 上一集'],
+        ['[ / ]', '减速 / 加速'],
+        ['0 – 9', '跳到 0% – 90%'],
+        ['F / W', '全屏 / 网页全屏'],
+        ['?', '显示 / 隐藏本帮助']
+    ];
+
+    function createShortcutHelp(host) {
+        const panel = document.createElement('div');
+        panel.className = 'player-shortcut-help';
+        panel.hidden = true;
+        panel.dataset.videoInteractive = 'true';
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-label', '键盘快捷键');
+        panel.innerHTML = `
+            <div class="player-shortcut-help-head"><strong>键盘快捷键</strong>
+                <button type="button" aria-label="关闭快捷键帮助">✕</button></div>
+            <dl>${SHORTCUT_HELP.map(([keys, label]) => `<dt>${escapeHtml(keys)}</dt><dd>${escapeHtml(label)}</dd>`).join('')}</dl>`;
+        host.appendChild(panel);
+        const onClick = event => {
+            event.stopPropagation();
+            if (event.target.closest('button')) panel.hidden = true;
+        };
+        panel.addEventListener('click', onClick);
+        return {
+            toggle() { panel.hidden = !panel.hidden; },
+            close() { panel.hidden = true; },
+            get isOpen() { return !panel.hidden; },
+            destroy() { panel.removeEventListener('click', onClick); panel.remove(); }
+        };
+    }
+
+    // Touch double-tap zones: left third rewinds, right third forwards, middle toggles play.
+    function doubleTapZone(clientX, rect) {
+        if (!rect || !(rect.width > 0)) return 'center';
+        const ratio = (clientX - rect.left) / rect.width;
+        if (ratio < 1 / 3) return 'back';
+        if (ratio > 2 / 3) return 'forward';
+        return 'center';
+    }
+
+    // Horizontal swipe seeking: a full-width swipe covers up to two minutes.
+    function swipeSeekTarget(startTime, dx, width, duration) {
+        if (!(width > 0) || !Number.isFinite(duration) || duration <= 0) return startTime;
+        const span = Math.min(120, duration);
+        return Math.max(0, Math.min(duration - 0.5, startTime + dx / width * span));
+    }
+
     window.PlayerEnhancements = {
         PLAYBACK_RATES,
         episodeLabel,
@@ -361,6 +459,11 @@
         skipAction,
         formatClock,
         preloadTargets,
-        preloadEpisode
+        preloadEpisode,
+        shortcutAction,
+        stepRate,
+        createShortcutHelp,
+        doubleTapZone,
+        swipeSeekTarget
     };
 })();

@@ -2,6 +2,19 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.31 - 2026-10-27
+
+### Added
+
+- Keyboard shortcuts: Space/K play-pause, J/L ±10 s, M mute, N/P next/previous episode, [ / ] speed, 0–9 jump to 0–90%, W web fullscreen, and holding → plays at 3x until released (a short press still seeks +5 s). Press ? for a shortcut help panel, also reachable from the settings panel on desktop. Volume, speed and mute changes show their new value. Browser shortcuts with Ctrl/Cmd are left alone.
+- Touch: double-tap the left or right third of the video to seek ±10 s; the middle plays or pauses. In mobile fullscreen, a horizontal swipe seeks with a time preview (up to two minutes per screen width), and long-press 3x speed now works there too.
+
+### Fixed
+
+- Seeking (dragging the progress bar, swiping or jumping by keyboard) no longer jumps back to the last saved progress point when the video buffers again. Saved progress is now restored only once per load.
+- Long-press speed works after Artplayer moves the player into its fullscreen layer, and a swipe cancels a pending long press.
+- The player's theme color matches the site theme. The episode counter appears once, in the info bar, including the episode name.
+
 ## 1.2.30 - 2026-10-27
 
 ### Added
