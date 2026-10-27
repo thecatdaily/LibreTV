@@ -2,6 +2,13 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.46 - 2026-10-28
+
+### Changed
+
+- README rewritten around what the project does today: a feature overview (search with merged versions, automatic source choice, ad filtering, 画质增强, MP4 download, stats panel, daily source check-up, PWA, OpenClash rules), screenshots and a before/after comparison made from test streams, step-by-step deployment for Cloudflare Pages, Docker, Docker Compose and Node.js, an environment variable table, post-deployment checks, how to update, and an FAQ. The version badge now reads `package.json`.
+- Docker: `docker-compose.yml` builds the image from this repository (`docker compose up -d --build`) instead of pulling the upstream `bestzwei/libretv` image, which has none of this fork's features; it documents `PASSWORD_HASH` and `PROXY_URL`. The Dockerfile installs with `npm ci --omit=dev` (the old `--only=production` flag is deprecated). Verified by building the image and running it: pages and new assets are served, the password is injected as a hash and the proxy answers 401 without it.
+
 ## 1.2.45 - 2026-10-28
 
 ### Added
