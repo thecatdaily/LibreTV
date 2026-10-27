@@ -2,6 +2,20 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.33 - 2026-10-27
+
+### Fixed
+
+- Titles containing an apostrophe (for example "Grey's Anatomy") no longer break the episode buttons in the detail dialog or the entries in the viewing history. Values in these inline handlers are now encoded as JavaScript literals, so a title returned by a source can no longer inject script.
+- Detail fields from sources (type, year, area, director, actors, remarks, synopsis) are reduced to plain text and escaped before display instead of being inserted as raw HTML.
+- Playback that breaks off mid-episode (a segment that keeps failing, a dropped connection, a decoding error) is now recovered: network errors retry with backoff (1, 2, 4, 8 s), media errors are repaired, and after repeated failures a small notice offers retry or switching sources instead of an endless spinner. Reconnecting to the network retries automatically.
+- Switching sources no longer stores "未知视频" as the current title.
+
+### Changed
+
+- Ad filtering now removes ad breaks spliced into playlists: short runs of segments between discontinuity markers that come from another host or directory, or have a different file-name pattern. Ambiguous playlists are left untouched, and discontinuity markers are kept, because deleting them (the previous behaviour) left the ads in place and could scramble timestamps.
+- Search fetches at most 10 result pages per source, three at a time, instead of up to 50 pages at once, to avoid rate limiting by sources and needless proxy requests. Background lookups in the source picker stop when the dialog closes.
+
 ## 1.2.32 - 2026-10-27
 
 ### Changed

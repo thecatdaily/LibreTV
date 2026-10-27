@@ -114,9 +114,12 @@ let skipMarks = { enabled: true, intro: 0, outro: 0 }; // 当前剧集的片头�
 let skipState = { introDone: false, outroDone: false, preloaded: false, ready: false };
 let nextEpisodePreloadController = null;
 let sideEpisodeList = null; // 宽屏时播放器右侧的选集栏
+let playbackNotice = null; // 播放中途断流时的提示（重试 / 切换资源）
+let playbackRecovery = null; // 当前 HLS 实例的中途错误恢复计划
+let playbackRecoveryTimer = null;
 const modalHome = { parent: null, nextSibling: null };
 const isWebkit = (typeof window.webkitConvertPointFromNodeToPage === 'function')
-const LONG_PRESS_EXCLUDED_SELECTOR = 'button, input, a, .art-controls, .art-setting, .art-settings, .player-top-actions, .player-episode-drawer, .player-next-card, .player-shortcut-help, .mobile-fullscreen-header, .mobile-fullscreen-footer';
+const LONG_PRESS_EXCLUDED_SELECTOR = 'button, input, a, .art-controls, .art-setting, .art-settings, .player-top-actions, .player-episode-drawer, .player-next-card, .player-shortcut-help, .player-interrupted-notice, .mobile-fullscreen-header, .mobile-fullscreen-footer';
 const PLAYER_SURFACE_INTERACTIVE_SELECTOR = [
     '.art-controls',
     '.art-control',
@@ -1010,9 +1013,11 @@ function setupPlayerOverlays() {
     episodeDrawer?.destroy();
     nextEpisodeCard?.destroy();
     shortcutHelp?.destroy();
+    playbackNotice?.destroy();
     episodeDrawer = null;
     nextEpisodeCard = null;
     shortcutHelp = null;
+    playbackNotice = null;
     const host = art?.template?.$player;
     if (!host || !window.PlayerEnhancements) return;
 
@@ -1033,6 +1038,10 @@ function setupPlayerOverlays() {
         getEndTime: getEffectiveEndTime
     });
     shortcutHelp = window.PlayerEnhancements.createShortcutHelp(host);
+    playbackNotice = window.PlayerEnhancements.createPlaybackNotice(host, {
+        onRetry: retryInterruptedPlayback,
+        onSwitch: showSwitchResourceModal
+    });
     skipMarks = window.PlayerEnhancements.readSkipMarks(currentVideoTitle);
     updateSkipSettings();
     if (!isMobilePlaybackDevice() && typeof art.setting?.update === 'function') {
@@ -1828,15 +1837,19 @@ function initPlayer(videoUrl) {
     autoplayMutedNoticeShown = false;
     preferredRateApplied = false;
     resetEpisodePlaybackState();
+    clearTimeout(playbackRecoveryTimer);
+    playbackRecovery = null;
 
     // 销毁旧实例
     if (art) {
         episodeDrawer?.destroy();
         nextEpisodeCard?.destroy();
         shortcutHelp?.destroy();
+        playbackNotice?.destroy();
         episodeDrawer = null;
         nextEpisodeCard = null;
         shortcutHelp = null;
+        playbackNotice = null;
         // 快捷键提示挂在播放器内，销毁前移回页面，避免随旧实例一起被删除
         const hint = document.getElementById('shortcutHint');
         if (hint) document.body.appendChild(hint);
@@ -1930,6 +1943,9 @@ function initPlayer(videoUrl) {
                 let errorDisplayed = false;
                 // 跟踪是否有错误发生
                 let errorCount = 0;
+                const recovery = window.PlayerEnhancements.createPlaybackRecovery();
+                playbackRecovery = recovery;
+                playbackNotice?.hide();
                 // 跟踪视频是否开始播放
                 let playbackStarted = false;
                 // 跟踪视频是否出现bufferAppendError
@@ -1938,6 +1954,7 @@ function initPlayer(videoUrl) {
                 // 监听视频播放事件
                 video.addEventListener('playing', function () {
                     playbackStarted = true;
+                    playbackNotice?.hide();
                     document.getElementById('player-loading').style.display = 'none';
                     document.getElementById('error').style.display = 'none';
                 });
@@ -1963,6 +1980,12 @@ function initPlayer(videoUrl) {
                 hls.on(Hls.Events.ERROR, function (event, data) {
                     // 增加错误计数
                     errorCount++;
+
+                    // 开播后的致命错误：hls.js 已停止加载，必须主动恢复，否则会一直转圈
+                    if (data.fatal && playbackStarted) {
+                        recoverMidPlayback(hls, recovery, data);
+                        return;
+                    }
 
                     // 处理bufferAppendError
                     if (data.details === 'bufferAppendError') {
@@ -2012,6 +2035,7 @@ function initPlayer(videoUrl) {
 
                 // 监听分段加载事件
                 hls.on(Hls.Events.FRAG_LOADED, function () {
+                    recovery.progress();
                     document.getElementById('player-loading').style.display = 'none';
                 });
 
@@ -2162,6 +2186,11 @@ function initPlayer(videoUrl) {
             if (el) el.style.display = 'none';
         });
 
+        // 已经播放了一段才出错（多见于原生 HLS / MP4）：不遮挡画面，提示重试或换源
+        if (art?.video?.currentTime > 1) {
+            showPlaybackInterrupted();
+            return;
+        }
         showError(classifyPlaybackError(error, { url: currentVideoUrl }));
     });
 
@@ -2214,10 +2243,8 @@ class CustomHlsJsLoader extends Hls.DefaultConfig.loader {
             if (context.type === 'manifest' || context.type === 'level') {
                 const onSuccess = callbacks.onSuccess;
                 callbacks.onSuccess = function (response, stats, context) {
-                    // 如果是m3u8文件，处理内容以移除广告分段
                     if (response.data && typeof response.data === 'string') {
-                        // 过滤掉广告段 - 实现更精确的广告过滤逻辑
-                        response.data = filterAdsFromM3U8(response.data, true);
+                        response.data = filterAdsFromM3U8(response.data, response.url || context.url);
                     }
                     return onSuccess(response, stats, context);
                 };
@@ -2228,26 +2255,63 @@ class CustomHlsJsLoader extends Hls.DefaultConfig.loader {
     }
 }
 
-// 过滤可疑的广告内容
-function filterAdsFromM3U8(m3u8Content, strictMode = false) {
+// 去掉插在正片里的广告分片；识别不出广告时原样返回（保留分段标记，避免时间轴错乱）
+function filterAdsFromM3U8(m3u8Content, playlistUrl = '') {
     if (!m3u8Content) return '';
-
-    // 按行分割M3U8内容
-    const lines = m3u8Content.split('\n');
-    const filteredLines = [];
-
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-
-        // 只过滤#EXT-X-DISCONTINUITY标识
-        if (!line.includes('#EXT-X-DISCONTINUITY')) {
-            filteredLines.push(line);
-        }
+    const result = window.HlsAdFilter?.filterPlaylist(m3u8Content, playlistUrl);
+    if (!result) return m3u8Content;
+    if (result.removedSegments > 0) {
+        console.info(`已过滤 ${result.removedSegments} 个广告分片（约 ${Math.round(result.removedSeconds)} 秒）`);
     }
-
-    return filteredLines.join('\n');
+    return result.content;
 }
 
+
+// 播放中途的致命错误：网络错误按退避重试加载，媒体错误尝试修复，多次失败后提示用户
+function recoverMidPlayback(hls, recovery, data) {
+    if (hls !== currentHls) return;
+    const step = recovery.next(data.type);
+    console.warn('播放中途出错，尝试恢复:', data.type, data.details, step.action);
+    clearTimeout(playbackRecoveryTimer);
+    if (step.action === 'startLoad') {
+        playbackRecoveryTimer = setTimeout(() => {
+            if (currentHls === hls) hls.startLoad();
+        }, step.delay);
+    } else if (step.action === 'recoverMedia') {
+        hls.recoverMediaError();
+    } else if (step.action === 'swapAudioCodec') {
+        hls.swapAudioCodec();
+        hls.recoverMediaError();
+    } else {
+        showPlaybackInterrupted();
+    }
+}
+
+function showPlaybackInterrupted() {
+    if (window.isSwitchingVideo) return;
+    const loadingEl = document.getElementById('player-loading');
+    if (loadingEl) loadingEl.style.display = 'none';
+    playbackNotice?.show(navigator.onLine === false
+        ? '网络已断开，恢复后会自动重试'
+        : '当前来源加载中断，可重试或切换资源');
+}
+
+function retryInterruptedPlayback() {
+    playbackNotice?.hide();
+    if (!art) return;
+    clearTimeout(playbackRecoveryTimer);
+    if (currentHls) {
+        playbackRecovery?.reset();
+        currentHls.startLoad();
+    } else if (currentVideoUrl && typeof art.switchQuality === 'function') {
+        art.switchQuality(currentVideoUrl);
+    }
+    if (art.video?.paused) tryStartPlayback();
+}
+
+window.addEventListener('online', () => {
+    if (playbackNotice?.visible) retryInterruptedPlayback();
+});
 
 // 显示错误
 function showError(message) {
@@ -3324,7 +3388,7 @@ async function switchToResource(sourceKey, vodId) {
         
         // 保存当前状态到localStorage
         try {
-            localStorage.setItem('currentVideoTitle', data.vod_name || '未知视频');
+            localStorage.setItem('currentVideoTitle', currentVideoTitle || data.videoInfo?.title || '未知视频');
             localStorage.setItem('currentEpisodes', JSON.stringify(data.episodes));
             localStorage.setItem('currentEpisodeIndex', targetIndex);
             localStorage.setItem('currentSourceCode', sourceKey);

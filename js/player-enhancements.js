@@ -440,6 +440,72 @@
         return Math.max(0, Math.min(duration - 0.5, startTime + dx / width * span));
     }
 
+    // Recovery plan for fatal hls.js errors after playback has started: retry the
+    // network with backoff, recover media errors (swapping the audio codec when
+    // one repeats quickly), then give up so the viewer can switch sources.
+    function createPlaybackRecovery({ maxNetworkRetries = 4, maxMediaRecoveries = 3, repeatWindowMs = 3000, settleMs = 30000 } = {}) {
+        let network = 0;
+        let media = 0;
+        let lastMediaAt = -Infinity;
+        return {
+            next(type, now = Date.now()) {
+                if (type === 'networkError') {
+                    if (network >= maxNetworkRetries) return { action: 'giveUp' };
+                    return { action: 'startLoad', delay: 1000 * 2 ** network++ };
+                }
+                if (type === 'mediaError') {
+                    if (media >= maxMediaRecoveries) return { action: 'giveUp' };
+                    const quickRepeat = now - lastMediaAt < repeatWindowMs;
+                    media++;
+                    lastMediaAt = now;
+                    return { action: quickRepeat ? 'swapAudioCodec' : 'recoverMedia', delay: 0 };
+                }
+                return { action: 'giveUp' };
+            },
+            // A segment loaded: the network is fine again; media errors are forgiven once playback settles.
+            progress(now = Date.now()) {
+                network = 0;
+                if (now - lastMediaAt > settleMs) media = 0;
+            },
+            reset() {
+                network = 0;
+                media = 0;
+                lastMediaAt = -Infinity;
+            }
+        };
+    }
+
+    // Non-blocking notice shown when playback breaks off mid-episode.
+    function createPlaybackNotice(host, { onRetry, onSwitch } = {}) {
+        const notice = document.createElement('div');
+        notice.className = 'player-interrupted-notice';
+        notice.hidden = true;
+        notice.dataset.videoInteractive = 'true';
+        notice.setAttribute('role', 'status');
+        notice.innerHTML = `<span data-notice-text></span>
+            <button type="button" data-notice-action="retry">重试</button>
+            <button type="button" data-notice-action="switch">切换资源</button>`;
+        host.appendChild(notice);
+        const onClick = event => {
+            event.stopPropagation();
+            const action = event.target.closest('[data-notice-action]')?.dataset.noticeAction;
+            if (!action) return;
+            notice.hidden = true;
+            if (action === 'retry') onRetry?.();
+            else onSwitch?.();
+        };
+        notice.addEventListener('click', onClick);
+        return {
+            show(text) {
+                notice.querySelector('[data-notice-text]').textContent = text;
+                notice.hidden = false;
+            },
+            hide() { notice.hidden = true; },
+            get visible() { return !notice.hidden; },
+            destroy() { notice.removeEventListener('click', onClick); notice.remove(); }
+        };
+    }
+
     window.PlayerEnhancements = {
         PLAYBACK_RATES,
         episodeLabel,
@@ -464,6 +530,8 @@
         stepRate,
         createShortcutHelp,
         doubleTapZone,
-        swipeSeekTarget
+        swipeSeekTarget,
+        createPlaybackRecovery,
+        createPlaybackNotice
     };
 })();

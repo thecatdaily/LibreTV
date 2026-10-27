@@ -862,6 +862,45 @@ input:checked + .slider:before {
     background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 45%, #22d3ee 100%);
 }
 
+/* 播放中途断流提示：顶部居中，不遮挡画面主体 */
+.player-interrupted-notice {
+    position: absolute;
+    top: 1rem;
+    left: 50%;
+    z-index: 61;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem 0.6rem;
+    max-width: calc(100% - 2rem);
+    padding: 0.55rem 0.7rem 0.55rem 0.95rem;
+    border-radius: 14px;
+    border: 1px solid rgba(251, 191, 36, 0.35);
+    background: rgba(10, 10, 20, 0.86);
+    backdrop-filter: blur(14px);
+    color: #eef0ff;
+    font-size: 0.875rem;
+    box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.9);
+    transform: translateX(-50%);
+}
+
+.player-interrupted-notice[hidden] {
+    display: none;
+}
+
+.player-interrupted-notice button {
+    padding: 0.3rem 0.85rem;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.player-interrupted-notice button[data-notice-action="switch"] {
+    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 45%, #22d3ee 100%);
+}
+
 @media (max-width: 640px) {
     .player-next-card {
         right: 0.6rem;

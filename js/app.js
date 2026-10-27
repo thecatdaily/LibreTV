@@ -901,11 +901,11 @@ function renderSearchResults(query, groups, completed, total) {
                                       </span>` : ''}
                                     ${(item.vod_year || '') ?
                     `<span class="text-xs py-0.5 px-1.5 rounded bg-opacity-20 bg-purple-500 text-purple-300">
-                                          ${item.vod_year}
+                                          ${escapeHtmlAttr(item.vod_year)}
                                       </span>` : ''}
                                 </div>
                                 <p class="text-gray-400 line-clamp-2 overflow-hidden ${hasCover ? '' : 'text-center'} mb-2">
-                                    ${(item.vod_remarks || '暂无介绍').toString().replace(/</g, '&lt;')}
+                                    ${escapeHtmlAttr(item.vod_remarks || '暂无介绍')}
                                 </p>
                             </div>
                             
@@ -1102,8 +1102,9 @@ function createMovieSourceSession(id, title, sourceCode) {
 async function checkMovieSource(session, entry) {
     try {
         if (!entry.vodId) {
-            const results = await searchByAPIAndKeyWord(entry.sourceCode, session.title);
+            const results = await searchByAPIAndKeyWord(entry.sourceCode, session.title, null, session.controller.signal);
             const match = results.find(item => normalizeMovieSourceTitle(item.vod_name) === session.titleKey);
+            if (session.controller.signal.aborted) return;
             if (!match) {
                 entry.status = 'missing';
                 return;
@@ -1156,6 +1157,17 @@ window.cancelMovieSourceSpeedChecks = () => {
     movieDetailRequestId += 1;
 };
 
+// 源站简介常带 HTML 标签和实体；用惰性的 DOMParser 取纯文本（不执行脚本、不加载图片），再由调用方转义
+function htmlToPlainText(html) {
+    const value = String(html || '');
+    if (!value) return '';
+    try {
+        return (new DOMParser().parseFromString(value, 'text/html').body.textContent || '').replace(/\s+/g, ' ').trim();
+    } catch (error) {
+        return value.replace(/<[^>]*>?/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+}
+
 // 显示详情 - 修改为支持自定义API
 async function showDetails(id, vod_name, sourceCode) {
     // 密码保护校验
@@ -1193,7 +1205,7 @@ async function showDetails(id, vod_name, sourceCode) {
             let detailInfoHtml = '';
             if (data.videoInfo) {
                 // Prepare description text, strip HTML and trim whitespace
-                const descriptionText = data.videoInfo.desc ? data.videoInfo.desc.replace(/<[^>]+>/g, '').trim() : '';
+                const descriptionText = escapeHtmlAttr(htmlToPlainText(data.videoInfo.desc));
 
                 // Check if there's any actual grid content
                 const hasGridContent = data.videoInfo.type || data.videoInfo.year || data.videoInfo.area || data.videoInfo.director || data.videoInfo.actor || data.videoInfo.remarks;
@@ -1203,12 +1215,12 @@ async function showDetails(id, vod_name, sourceCode) {
                 <div class="modal-detail-info">
                     ${hasGridContent ? `
                     <div class="detail-grid">
-                        ${data.videoInfo.type ? `<div class="detail-item"><span class="detail-label">类型:</span> <span class="detail-value">${data.videoInfo.type}</span></div>` : ''}
-                        ${data.videoInfo.year ? `<div class="detail-item"><span class="detail-label">年份:</span> <span class="detail-value">${data.videoInfo.year}</span></div>` : ''}
-                        ${data.videoInfo.area ? `<div class="detail-item"><span class="detail-label">地区:</span> <span class="detail-value">${data.videoInfo.area}</span></div>` : ''}
-                        ${data.videoInfo.director ? `<div class="detail-item"><span class="detail-label">导演:</span> <span class="detail-value">${data.videoInfo.director}</span></div>` : ''}
-                        ${data.videoInfo.actor ? `<div class="detail-item"><span class="detail-label">主演:</span> <span class="detail-value">${data.videoInfo.actor}</span></div>` : ''}
-                        ${data.videoInfo.remarks ? `<div class="detail-item"><span class="detail-label">备注:</span> <span class="detail-value">${data.videoInfo.remarks}</span></div>` : ''}
+                        ${data.videoInfo.type ? `<div class="detail-item"><span class="detail-label">类型:</span> <span class="detail-value">${escapeHtmlAttr(htmlToPlainText(data.videoInfo.type))}</span></div>` : ''}
+                        ${data.videoInfo.year ? `<div class="detail-item"><span class="detail-label">年份:</span> <span class="detail-value">${escapeHtmlAttr(htmlToPlainText(data.videoInfo.year))}</span></div>` : ''}
+                        ${data.videoInfo.area ? `<div class="detail-item"><span class="detail-label">地区:</span> <span class="detail-value">${escapeHtmlAttr(htmlToPlainText(data.videoInfo.area))}</span></div>` : ''}
+                        ${data.videoInfo.director ? `<div class="detail-item"><span class="detail-label">导演:</span> <span class="detail-value">${escapeHtmlAttr(htmlToPlainText(data.videoInfo.director))}</span></div>` : ''}
+                        ${data.videoInfo.actor ? `<div class="detail-item"><span class="detail-label">主演:</span> <span class="detail-value">${escapeHtmlAttr(htmlToPlainText(data.videoInfo.actor))}</span></div>` : ''}
+                        ${data.videoInfo.remarks ? `<div class="detail-item"><span class="detail-label">备注:</span> <span class="detail-value">${escapeHtmlAttr(htmlToPlainText(data.videoInfo.remarks))}</span></div>` : ''}
                     </div>` : ''}
                     ${descriptionText ? `
                     <div class="detail-desc">
@@ -1229,7 +1241,7 @@ async function showDetails(id, vod_name, sourceCode) {
                 ${detailInfoHtml}
                 <div class="flex flex-wrap items-center justify-between mb-4 gap-2">
                     <div class="flex items-center gap-2">
-                        <button onclick="toggleEpisodeOrder('${sourceCode}', '${id}')" 
+                        <button id="episodeOrderToggle" onclick="toggleEpisodeOrder(${inlineJsArg(sourceCode)}, ${inlineJsArg(id)})" 
                                 class="px-3 py-1.5 bg-[#333] hover:bg-[#444] border border-[#444] rounded text-sm transition-colors flex items-center gap-1">
                             <svg class="w-4 h-4 transform ${episodesReversed ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
@@ -1375,7 +1387,7 @@ function renderEpisodes(vodName, sourceCode, vodId) {
         // 根据倒序状态计算真实的剧集索引
         const realIndex = episodesReversed ? currentEpisodes.length - 1 - index : index;
         return `
-            <button id="episode-${realIndex}" onclick="playVideo('${episode}','${vodName.replace(/"/g, '&quot;')}', '${sourceCode}', ${realIndex}, '${vodId}')" 
+            <button id="episode-${realIndex}" onclick="playVideo(${inlineJsArg(episode)}, ${inlineJsArg(vodName)}, ${inlineJsArg(sourceCode)}, ${realIndex}, ${inlineJsArg(vodId)})" 
                     class="px-4 py-2 bg-[#222] hover:bg-[#333] border border-[#333] rounded-lg transition-colors text-center episode-btn">
                 ${realIndex + 1}
             </button>
@@ -1404,7 +1416,7 @@ function toggleEpisodeOrder(sourceCode, vodId) {
     }
 
     // 更新按钮文本和箭头方向
-    const toggleBtn = document.querySelector(`button[onclick="toggleEpisodeOrder('${sourceCode}', '${vodId}')"]`);
+    const toggleBtn = document.getElementById('episodeOrderToggle');
     if (toggleBtn) {
         toggleBtn.querySelector('span').textContent = episodesReversed ? '正序排列' : '倒序排列';
         const arrowIcon = toggleBtn.querySelector('svg');
