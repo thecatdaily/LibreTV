@@ -1,4 +1,4 @@
-const APP_VERSION = '202610272200';
+const APP_VERSION = '202610272300';
 const APP_SHELL_CACHE = `libretv-shell-${APP_VERSION}`;
 const OFFLINE_URL = '/offline.html';
 
@@ -22,6 +22,8 @@ const APP_SHELL_ASSETS = [
   '/js/source-speed.js',
   '/js/quick-play.js',
   '/js/source-availability.js',
+  '/js/source-autopilot.js',
+  '/js/source-hosts.js',
   '/js/experience.js',
   '/js/player-recommendations.js',
   '/js/mobile-fullscreen.js',

@@ -87,9 +87,6 @@ test('verified customer API sources are available and invalid placeholders are r
   assert.equal(window.API_SITES.maoyan.api, 'https://api.maoyanapi.top/api.php/provide/vod');
   assert.equal(window.API_SITES.rycj.api, 'https://cj.rycjapi.com/api.php/provide/vod');
   assert.equal(window.API_SITES.huya.api, 'https://www.huyaapi.com/api.php/provide/vod');
-  assert.equal(window.API_SITES.xinlang.api, 'https://api.xinlangapi.com/xinlangapi.php/provide/vod');
-  assert.equal(window.API_SITES.wolong.api, 'https://wolongzyw.com/api.php/provide/vod');
-  assert.equal(window.API_SITES.dbzy.api, 'https://dbzy.tv/api.php/provide/vod');
   assert.equal(window.API_SITES.mdzy.api, 'https://www.mdzyapi.com/api.php/provide/vod');
   assert.equal(window.API_SITES.zuid.api, 'https://api.zuidapi.com/api.php/provide/vod');
   assert.equal(window.API_SITES.baidu.api, 'https://api.apibdzy.com/api.php/provide/vod');
@@ -98,7 +95,6 @@ test('verified customer API sources are available and invalid placeholders are r
   assert.equal(window.API_SITES.jinying.api, 'https://jinyingzy.com/api.php/provide/vod');
   assert.equal(window.API_SITES.hongniu.api, 'https://www.hongniuzy2.com/api.php/provide/vod');
   assert.equal(window.API_SITES.hhzy.api, 'https://hhzyapi.com/api.php/provide/vod');
-  assert.equal(window.API_SITES.p2100.api, 'https://p2100.net/api.php/provide/vod');
   assert.equal(window.API_SITES.uku.api, 'https://api.ukuapi88.com/api.php/provide/vod');
   assert.equal(window.API_SITES.ckzy.adult, true);
   assert.equal(window.API_SITES.ckzy.api, 'https://www.ckzy1.com/api.php/provide/vod');
@@ -116,7 +112,16 @@ test('verified customer API sources are available and invalid placeholders are r
   assert.equal(window.API_SITES.siwa.api, 'https://siwazyw.tv/api.php/provide/vod');
   assert.equal(window.API_SITES.qiqi, undefined);
   assert.equal(window.API_SITES.testSource, undefined);
-  assert.deepEqual(Array.from(window.DEFAULT_SELECTED_APIS), ['ysgc', 'jszy', 'wujin', 'maoyan']);
+  // 2026-10: these no longer answer keyword searches (anti-bot page, Cloudflare challenge, "forbids keyword search", "server busy").
+  for (const removed of ['wolong', 'p2100', 'dbzy', 'xinlang']) assert.equal(window.API_SITES[removed], undefined, removed);
+  assert.equal(window.API_SITES.ffzy.api, 'https://api.ffzyapi.com/api.php/provide/vod');
+  assert.equal(window.API_SITES.bfzy.api, 'https://bfzyapi.com/api.php/provide/vod');
+  assert.equal(window.API_SITES.zy360.api, 'https://360zy.com/api.php/provide/vod');
+  // Mirrors of one network share a family so the settings can say "pick one".
+  const jisu = Object.keys(window.API_SITES).filter(key => window.API_SITES[key].family === 'jisu');
+  assert.deepEqual(jisu, ['jszy', 'huya', 'guangsu', 'jinying', 'hongniu', 'hhzy']);
+  assert.deepEqual(Array.from(window.DEFAULT_SELECTED_APIS), ['ysgc', 'ffzy', 'bfzy', 'jszy', 'wujin']);
+  assert.equal(window.DEFAULT_SELECTED_APIS.filter(key => window.API_SITES[key].family === 'jisu').length, 1);
 });
 
 test('Docker image supports optional outbound proxy without changing default startup', async () => {
@@ -1237,15 +1242,16 @@ test('release metadata is bumped for this update', async () => {
 
   const changelog = await readProjectFile('CHANGELOG.md');
 
-  assert.equal(packageJson.version, '1.2.36');
-  assert.equal(lockJson.version, '1.2.36');
-  assert.equal(lockJson.packages[''].version, '1.2.36');
-  assert.match(config, /version:\s*'1\.2\.36'/);
-  assert.match(serviceWorker, /const APP_VERSION = '202610272200'/);
+  assert.equal(packageJson.version, '1.2.37');
+  assert.equal(lockJson.version, '1.2.37');
+  assert.equal(lockJson.packages[''].version, '1.2.37');
+  assert.match(config, /version:\s*'1\.2\.37'/);
+  assert.match(serviceWorker, /const APP_VERSION = '202610272300'/);
   assert.match(serviceWorker, /'\/js\/player-recommendations\.js'/);
   assert.match(serviceWorker, /'\/js\/mobile-fullscreen\.js'/);
   assert.match(serviceWorker, /'\/css\/theme\.css'/);
   assert.match(serviceWorker, /'\/js\/source-speed\.js'/);
+  assert.match(changelog, /## 1\.2\.37 - 2026-10-28[\s\S]*?Daily source check-up in the browser/);
   assert.match(changelog, /## 1\.2\.36 - 2026-10-28[\s\S]*?hide titles that no selected source can play/);
   assert.match(changelog, /## 1\.2\.35 - 2026-10-28[\s\S]*?slim sticky top bar/);
   assert.match(changelog, /## 1\.2\.34 - 2026-10-27[\s\S]*?combines genre, region, year or decade/);

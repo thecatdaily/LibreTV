@@ -1,7 +1,7 @@
 {
   "name": "libretv",
   "type": "module",
-  "version": "1.2.36",
+  "version": "1.2.37",
   "private": true,
   "description": "免费在线视频搜索与观看平台",
   "author": "bestZwei",
@@ -10,7 +10,8 @@
     "dev": "nodemon server.mjs",
     "start": "node server.mjs",
     "test": "node --test",
-    "smoke:browser": "node scripts/smoke-browser.mjs"
+    "smoke:browser": "node scripts/smoke-browser.mjs",
+    "evaluate:sources": "node scripts/evaluate-sources.mjs"
   },
   "dependencies": {
     "axios": "^1.9.0",

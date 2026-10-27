@@ -1630,3 +1630,86 @@ html body.lt-player-page .error-action-primary {
 
 #homeEmptyGuide { max-width:80rem; margin:1.5rem auto 0; padding:1rem; border:1px solid #46516f; border-radius:12px; color:#d4deed; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
 #homeEmptyGuide.hidden {display:none!important;}
+
+/* 设置 · 数据源：镜像站标记与体检状态点 */
+.api-mirror-tag {
+    flex: none;
+    margin-left: 0.3rem;
+    padding: 0 0.3rem;
+    border-radius: 4px;
+    font-size: 0.62rem;
+    line-height: 1.35;
+    color: #c4b5fd;
+    background: rgba(139, 92, 246, 0.16);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    cursor: help;
+}
+
+.api-health-dot {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    margin-left: 0.35rem;
+    border-radius: 999px;
+    background: transparent;
+}
+
+.api-health-dot[data-health="ok"] { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.7); }
+.api-health-dot[data-health="degraded"] { background: #f59e0b; }
+.api-health-dot[data-health="failed"] { background: #ef4444; }
+
+.source-autopilot-notice {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-bottom: 0.75rem;
+}
+
+.source-autopilot-notice[hidden] { display: none; }
+
+.source-autopilot-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.5rem;
+    padding: 0.5rem 0.65rem;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    color: var(--lt-muted);
+    background: rgba(139, 92, 246, 0.08);
+    border: 1px solid rgba(139, 92, 246, 0.25);
+}
+
+.source-autopilot-row span { flex: 1 1 12rem; min-width: 0; }
+
+html body .source-autopilot-row button {
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    color: #e9e5ff;
+    background: rgba(139, 92, 246, 0.25);
+}
+
+html body .source-autopilot-row button + button { background: transparent; color: var(--lt-faint); }
+
+/* 设置 · OpenClash 直连规则弹窗 */
+.clash-rules-tip {
+    margin-bottom: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--lt-muted);
+}
+
+html body .clash-rules-text {
+    display: block;
+    width: 100%;
+    min-height: 18rem;
+    margin-bottom: 0.75rem;
+    padding: 0.75rem 0.9rem;
+    border-radius: 12px;
+    font: 0.8rem/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: #d6dcf5;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--lt-line);
+    resize: vertical;
+    white-space: pre;
+}

@@ -2,6 +2,22 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.37 - 2026-10-28
+
+### Added
+
+- Daily source check-up in the browser, measured from the viewer's own network. Once a day the home page quietly searches each built-in source (and selected custom ones), keeps a short history, and shows a status dot next to each source in Settings. A selected source that has switched off keyword search (two days) or failed three days in a row is stopped automatically. When the stopped source has a healthy mirror of the same network, the mirror takes its place. Built-in sources that stay healthy and are not mirrors of a selected one are suggested. Every action can be undone from a notice in Settings.
+- Sources are ranked by recent health and real playback quality (time to first frame, stalls) for quick play and for the source list of a grouped search result.
+- Settings → 路由器直连规则 generates OpenClash DIRECT rules (`- DOMAIN-SUFFIX,域名,DIRECT`) for source APIs, video CDNs, poster hosts and Douban, ready to paste into OpenClash custom rules. CDN and image domains are learned from search results and played segments, because they rotate often (for example lzcdn28 → lzcdn29). Adult sources are listed in a separate section.
+- `npm run evaluate:sources` (`scripts/evaluate-sources.mjs`) evaluates every built-in source plus optional candidates: search hit rate on six popular titles, latency, library size, last update, playlist and segment reachability, and ad breaks.
+
+### Changed
+
+- Source list review (October 2026): 卧龙, 飘零, 豆瓣资源 and 新浪 are removed. They no longer answer keyword searches (an anti-bot page, a Cloudflare challenge, "forbids keyword search", "server busy"). 非凡影视, 暴风资源 and 360资源 are added.
+- Default sources are now 影视工厂, 非凡影视, 暴风资源, 极速资源 and 无尽资源. Existing users keep their choices: removed sources are dropped and the new defaults are added once.
+- 极速, 虎牙, 光速, 金鹰, 红牛 and 豪华 are mirrors of one network (same catalogue and IDs, different CDNs). They are marked 同源 in Settings, and only one of them is selected by default.
+- Opening a Douban recommendation no longer forces 豆瓣资源 (or any source) into the selection unless no searchable source is selected at all.
+
 ## 1.2.36 - 2026-10-28
 
 ### Added

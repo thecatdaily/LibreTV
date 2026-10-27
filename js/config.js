@@ -17,12 +17,12 @@ const SITE_CONFIG = {
     url: '',
     description: '免费在线视频搜索与观看平台',
     logo: 'image/logo.png',
-    version: '1.2.36'
+    version: '1.2.37'
 };
 
-const DEFAULT_SELECTED_APIS = ['ysgc', 'jszy', 'wujin', 'maoyan'];
+const DEFAULT_SELECTED_APIS = ['ysgc', 'ffzy', 'bfzy', 'jszy', 'wujin'];
 const DEFAULT_API_MIGRATION_KEY = 'defaultApiMigrationVersion';
-const DEFAULT_API_MIGRATION_VERSION = '20260511-sources-v2';
+const DEFAULT_API_MIGRATION_VERSION = '20261028-sources-v3';
 
 function escapeHtmlAttr(value) {
     return String(value ?? '')
