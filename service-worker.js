@@ -1,4 +1,4 @@
-const APP_VERSION = '202610272330';
+const APP_VERSION = '202610280930';
 const APP_SHELL_CACHE = `libretv-shell-${APP_VERSION}`;
 const OFFLINE_URL = '/offline.html';
 
@@ -12,11 +12,13 @@ const APP_SHELL_ASSETS = [
   '/diagnostics.html',
   OFFLINE_URL,
   '/manifest.json',
+  '/css/modals.css',
   '/css/styles.css',
   '/css/index.css',
   '/css/player.css',
   '/css/watch.css',
   '/css/theme.css',
+  '/css/tailwind.css',
   '/js/config.js',
   '/js/proxy-auth.js',
   '/js/source-speed.js',
@@ -51,7 +53,6 @@ const APP_SHELL_ASSETS = [
   '/js/index-page.js',
   '/js/version-check.js',
   '/js/pwa-register.js',
-  '/libs/tailwindcss.min.js',
   '/libs/sha256.min.js',
   '/libs/hls.min.js',
   '/libs/artplayer.min.js',
