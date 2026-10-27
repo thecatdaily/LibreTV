@@ -1239,3 +1239,14 @@ input:checked + .slider:before {
 .download-panel-actions:empty { display: none; }
 .download-panel-actions button { padding: 0.35rem 0.9rem; border-radius: 8px; font-size: 0.8rem; color: #e2e8f0; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12); }
 .download-panel-actions .download-panel-primary { color: #fff; background: #7c3aed; border-color: #7c3aed; }
+
+/* 画质增强：画布盖在视频上显示处理后的画面，视频本身隐藏但继续解码 */
+.video-enhance-canvas {
+    position: absolute;
+    z-index: 10;
+    display: block;
+    pointer-events: none;
+}
+
+.video-enhance-canvas[hidden] { display: none; }
+.art-video-player.video-enhance-on .art-video { opacity: 0 !important; }

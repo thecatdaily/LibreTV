@@ -2,6 +2,12 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.44 - 2026-10-28
+
+### Added
+
+- Player 画质增强 (player settings → 画质增强: 关闭 / 标准 / 锐利), independent of the graphics card brand and the same on Windows, macOS, Android and iOS. It runs AMD FidelityFX Super Resolution 1.0 (MIT) in the browser through WebGL2: EASU upscales edge-aware to the displayed size in device pixels, then RCAS sharpens with noise detection. 标准 sharpens moderately, 锐利 fully (old or soft sources, animation). Frames are drawn only when the video presents a new one (`requestVideoFrameCallback`), the choice is remembered, and the stats panel shows the mode and sizes. If frames start dropping, it first draws at 1× device pixels and then turns itself off with a notice; browsers without WebGL2 do not show the option. Off by default. Picture-in-picture and iPhone's system fullscreen show the original picture.
+
 ## 1.2.43 - 2026-10-28
 
 ### Added
