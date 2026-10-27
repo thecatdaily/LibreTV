@@ -2,6 +2,17 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.41 - 2026-10-28
+
+### Changed
+
+- Player page: the recommendation section now shows Douban's "people who liked this also liked" titles for the video being played (for example 漫长的季节 → 边水往事, 狂飙, 隐秘的角落), in Douban's order. The Douban ID comes from the source, or from another source's copy of the same title when the current source lacks it, and is kept for the title so a source switch shows the same list. Titles without a Douban entry fall back to Douban's popular titles of the same genre and region (for example 中国大陆 · 犯罪). The heading says which one is shown. Recommendations no longer use a broad popularity list or the current source's latest uploads. Titles no selected source can play are still removed.
+- Douban cards for titles Douban has not rated yet (too few ratings) show a muted 暂无评分 label instead of nothing, so a missing score is not mistaken for a loading problem. With 高分优先 these titles come after all rated ones.
+
+### Fixed
+
+- Douban titles without a poster yet showed Douban's generic grey picture. When a selected source has the title, its own cover is shown instead (home page cards and player recommendations). The availability check now remembers that cover.
+
 ## 1.2.40 - 2026-10-28
 
 ### Changed

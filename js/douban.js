@@ -274,14 +274,25 @@ function maybeAutoLoadMoreDouban(container) {
     }, 800);
 }
 
+// Douban sends a generic picture (…/pics/subject/movie_normal.png) for titles without a poster yet.
+function isDoubanDefaultPoster(url) {
+    return /doubanio\.com\/f\/|\/pics\/subject\/|_default/.test(String(url || ''));
+}
+
 function checkDoubanCardAvailability(card, item, container) {
     if (!window.SourceAvailability) return;
-    window.SourceAvailability.check({
+    const request = {
         title: item.title,
         year: item.year || '',
         kind: doubanMovieTvCurrentSwitch,
         isWanted: () => card.isConnected
-    }).then(available => {
+    };
+    window.SourceAvailability.check(request).then(available => {
+        if (available && isDoubanDefaultPoster(item.cover)) {
+            const cover = window.SourceAvailability.coverOf(request);
+            const image = card.querySelector('img');
+            if (cover && image) { image.dataset.originalSrc = cover; image.src = cover; }
+        }
         if (available !== false || !card.isConnected) return;
         card.classList.add('douban-unavailable');
         doubanHiddenCount++;
@@ -926,7 +937,7 @@ function renderDoubanCards(data, container, options = {}) {
                     <div class="absolute inset-0 bg-gradient-to-t from-black to-transparent opacity-60"></div>
                     ${safeRate ? `<div class="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded-sm">
                         <span class="text-yellow-400">★</span> ${safeRate}
-                    </div>` : ''}
+                    </div>` : `<div class="douban-unrated-badge" title="豆瓣评分人数不足，暂未给出评分">暂无评分</div>`}
                     <div class="douban-unavailable-badge">暂无播放源</div>
                     <div class="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded-sm hover:bg-[#333] transition-colors">
                         <a href="${escapeHtmlAttr(item.url)}" target="_blank" rel="noopener noreferrer" title="在豆瓣查看" onclick="event.stopPropagation();">

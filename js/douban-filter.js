@@ -171,6 +171,8 @@
     window.DoubanFilter = {
         PAGE_SIZE,
         SORTS,
+        GENRES: { movie: MOVIE_GENRES, tv: TV_GENRES.电视剧 },
+        REGIONS: { movie: MOVIE_REGIONS, tv: TV_REGIONS },
         yearOptions,
         defaultFilter,
         rows,

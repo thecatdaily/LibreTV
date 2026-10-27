@@ -1754,3 +1754,6 @@ html body .clash-rules-text {
     resize: vertical;
     white-space: pre;
 }
+
+/* 豆瓣卡片：评分人数不足的新片 */
+.douban-unrated-badge { position: absolute; bottom: .5rem; left: .5rem; padding: .2rem .5rem; border-radius: 999px; font-size: .7rem; color: #a5adc4; background: rgba(0, 0, 0, .6); }
