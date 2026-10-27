@@ -1242,15 +1242,16 @@ test('release metadata is bumped for this update', async () => {
 
   const changelog = await readProjectFile('CHANGELOG.md');
 
-  assert.equal(packageJson.version, '1.2.45');
-  assert.equal(lockJson.version, '1.2.45');
-  assert.equal(lockJson.packages[''].version, '1.2.45');
-  assert.match(config, /version:\s*'1\.2\.45'/);
-  assert.match(serviceWorker, /const APP_VERSION = '202610281230'/);
+  assert.equal(packageJson.version, '1.2.46');
+  assert.equal(lockJson.version, '1.2.46');
+  assert.equal(lockJson.packages[''].version, '1.2.46');
+  assert.match(config, /version:\s*'1\.2\.46'/);
+  assert.match(serviceWorker, /const APP_VERSION = '202610281300'/);
   assert.match(serviceWorker, /'\/js\/player-recommendations\.js'/);
   assert.match(serviceWorker, /'\/js\/mobile-fullscreen\.js'/);
   assert.match(serviceWorker, /'\/css\/theme\.css'/);
   assert.match(serviceWorker, /'\/js\/source-speed\.js'/);
+  assert.match(changelog, /## 1\.2\.46 - 2026-10-28[\s\S]*?README rewritten/);
   assert.match(changelog, /## 1\.2\.45 - 2026-10-28[\s\S]*?低画质修复/);
   assert.match(changelog, /## 1\.2\.44 - 2026-10-28[\s\S]*?FidelityFX Super Resolution/);
   assert.match(changelog, /## 1\.2\.43 - 2026-10-28[\s\S]*?下载本集/);
