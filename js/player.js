@@ -137,6 +137,8 @@ let nextEpisodeCard = null; // 片尾“下一集”倒计时卡片
 let temporaryRateActive = false; // 长按倍速期间不记忆倍速
 let preferredRateApplied = false; // 每次加载只恢复一次记忆的倍速
 let skipMarks = { enabled: true, intro: 0, outro: 0 }; // 当前剧集的片头片尾标记
+let playerStats = null; // 「统计信息」面板（网络、缓冲、分片）
+let statsTracker = null; // 当前 HLS 实例的下载统计
 // ready：新一集的元数据加载完成前，video.currentTime 仍是上一集的进度，不能据此跳过或预加载
 let skipState = { introDone: false, outroDone: false, preloaded: false, ready: false };
 let nextEpisodePreloadController = null;
@@ -146,7 +148,7 @@ let playbackRecovery = null; // 当前 HLS 实例的中途错误恢复计划
 let playbackRecoveryTimer = null;
 const modalHome = { parent: null, nextSibling: null };
 const isWebkit = (typeof window.webkitConvertPointFromNodeToPage === 'function')
-const LONG_PRESS_EXCLUDED_SELECTOR = 'button, input, a, .art-controls, .art-setting, .art-settings, .player-top-actions, .player-episode-drawer, .player-next-card, .player-shortcut-help, .player-interrupted-notice, .mobile-fullscreen-header, .mobile-fullscreen-footer';
+const LONG_PRESS_EXCLUDED_SELECTOR = 'button, input, a, .art-controls, .art-setting, .art-settings, .player-top-actions, .player-episode-drawer, .player-next-card, .player-shortcut-help, .player-stats-panel, .art-info, .player-interrupted-notice, .mobile-fullscreen-header, .mobile-fullscreen-footer';
 const PLAYER_SURFACE_INTERACTIVE_SELECTOR = [
     '.art-controls',
     '.art-control',
@@ -162,6 +164,8 @@ const PLAYER_SURFACE_INTERACTIVE_SELECTOR = [
     '[class*="art-setting"]',
     '[class*="art-selector"]',
     '[class*="art-contextmenu"]',
+    '.art-info',
+    '.player-stats-panel',
     '.progress-preview',
     '.player-top-actions',
     '[data-video-interactive="true"]',
@@ -1037,10 +1041,13 @@ function getNextEpisodeInfo() {
 
 // 选集面板和下一集卡片挂在播放器内部，全屏时同样可用
 function setupPlayerOverlays() {
+    const statsWereOpen = Boolean(playerStats?.isOpen);
     episodeDrawer?.destroy();
     nextEpisodeCard?.destroy();
     shortcutHelp?.destroy();
     playbackNotice?.destroy();
+    playerStats?.destroy();
+    playerStats = null;
     episodeDrawer = null;
     nextEpisodeCard = null;
     shortcutHelp = null;
@@ -1071,6 +1078,7 @@ function setupPlayerOverlays() {
     });
     skipMarks = window.PlayerEnhancements.readSkipMarks(currentVideoTitle);
     updateSkipSettings();
+    setupPlayerStats(host, statsWereOpen);
     if (!isMobilePlaybackDevice() && typeof art.setting?.update === 'function') {
         art.setting.update({
             name: 'shortcut-help',
@@ -1088,6 +1096,31 @@ function setupPlayerOverlays() {
     const hint = document.getElementById('shortcutHint');
     if (hint && hint.parentElement !== host) host.appendChild(hint);
     updateEpisodeControlVisibility();
+}
+
+// 「统计信息」：替换 ArtPlayer 自带的英文信息面板（它的关闭按钮会被画面点击抢走），右键菜单和播放设置里都能打开
+function setupPlayerStats(host, reopen) {
+    if (!window.PlayerStats) return;
+    playerStats = window.PlayerStats.createPanel(host, {
+        getVideo: () => art?.video,
+        getHls: () => (currentHls?.media === art?.video ? currentHls : null),
+        getTracker: () => statsTracker,
+        getInfo: () => ({
+            title: currentVideoTitle,
+            episode: currentEpisodeCounterText(),
+            source: API_SITES?.[new URLSearchParams(location.search).get('source') || '']?.name || ''
+        })
+    });
+    const toggle = () => playerStats?.toggle();
+    try {
+        art.contextmenu?.update?.({ name: 'info', index: 40, html: '统计信息', click(contextmenu) { toggle(); contextmenu.show = false; } });
+    } catch (error) { console.warn('更新右键菜单失败:', error); }
+    if (typeof art.setting?.update === 'function') {
+        try {
+            art.setting.update({ name: 'player-stats', html: '统计信息', tooltip: '网络 / 缓冲', onClick() { art.setting.show = false; toggle(); return '网络 / 缓冲'; } });
+        } catch (error) { console.warn('更新播放设置失败:', error); }
+    }
+    if (reopen) playerStats.show();
 }
 
 // ---- 跳过片头片尾（按剧名记忆），在播放器设置面板中设置，全屏可用 ----
@@ -1964,6 +1997,8 @@ function initPlayer(videoUrl) {
                 // 创建新的HLS实例
                 const hls = new Hls(hlsConfig);
                 currentHls = hls;
+                const tracker = window.PlayerStats?.createTracker() || null;
+                statsTracker = tracker;
                 updateHlsQualityControl();
 
                 // 跟踪是否已经显示错误
@@ -2063,6 +2098,7 @@ function initPlayer(videoUrl) {
                 // 监听分段加载事件
                 hls.on(Hls.Events.FRAG_LOADED, function (event, data) {
                     recovery.progress();
+                    tracker?.fragment(window.PlayerStats.fragmentStats(data));
                     // 分片可能在另一个域名上，记下来供“路由器直连规则”使用
                     window.SourceHosts?.learnUrl(data?.frag?.url);
                     document.getElementById('player-loading').style.display = 'none';
@@ -2076,6 +2112,10 @@ function initPlayer(videoUrl) {
 
                 hls.on(Hls.Events.LEVEL_SWITCHED, function () {
                     updateHlsQualityControl();
+                });
+
+                hls.on(Hls.Events.BUFFER_CODECS, function (event, data) {
+                    tracker?.codecs(data);
                 });
             }
         }
@@ -2292,6 +2332,8 @@ function filterAdsFromM3U8(m3u8Content, playlistUrl = '') {
     if (result.removedSegments > 0) {
         console.info(`已过滤 ${result.removedSegments} 个广告分片（约 ${Math.round(result.removedSeconds)} 秒）`);
     }
+    // 只记媒体播放列表的结果（主列表没有分片，不能覆盖掉真实的过滤数）
+    if (/#EXTINF/.test(m3u8Content)) statsTracker?.ads(result);
     return result.content;
 }
 
