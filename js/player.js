@@ -109,6 +109,11 @@ let episodeDrawer = null; // 播放器内选集面板（全屏可用）
 let nextEpisodeCard = null; // 片尾“下一集”倒计时卡片
 let temporaryRateActive = false; // 长按倍速期间不记忆倍速
 let preferredRateApplied = false; // 每次加载只恢复一次记忆的倍速
+let skipMarks = { enabled: true, intro: 0, outro: 0 }; // 当前剧集的片头片尾标记
+// ready：新一集的元数据加载完成前，video.currentTime 仍是上一集的进度，不能据此跳过或预加载
+let skipState = { introDone: false, outroDone: false, preloaded: false, ready: false };
+let nextEpisodePreloadController = null;
+let sideEpisodeList = null; // 宽屏时播放器右侧的选集栏
 const modalHome = { parent: null, nextSibling: null };
 const isWebkit = (typeof window.webkitConvertPointFromNodeToPage === 'function')
 const PLAYER_SURFACE_INTERACTIVE_SELECTOR = [
@@ -997,14 +1002,158 @@ function setupPlayerOverlays() {
         host,
         video: art.video,
         getNext: getNextEpisodeInfo,
-        isEnabled: () => autoplayEnabled,
-        onPlayNext: playNextEpisode
+        isEnabled: () => autoplayEnabled && skipState.ready,
+        onPlayNext: playNextEpisode,
+        getEndTime: getEffectiveEndTime
     });
+    skipMarks = window.PlayerEnhancements.readSkipMarks(currentVideoTitle);
+    updateSkipSettings();
+    host.classList.toggle('player-touch-device', isMobilePlaybackDevice());
 
     // 快捷键提示放进播放器，居中显示在画面上（全屏时也可见）
     const hint = document.getElementById('shortcutHint');
     if (hint && hint.parentElement !== host) host.appendChild(hint);
     updateEpisodeControlVisibility();
+}
+
+// ---- 跳过片头片尾（按剧名记忆），在播放器设置面板中设置，全屏可用 ----
+function resetEpisodePlaybackState() {
+    skipState = { introDone: false, outroDone: false, preloaded: false, ready: false };
+    nextEpisodePreloadController?.abort();
+    nextEpisodePreloadController = null;
+}
+
+function getEffectiveEndTime() {
+    const duration = Number(art?.video?.duration);
+    return window.PlayerEnhancements.effectiveEndTime(duration, skipMarks);
+}
+
+function saveSkipMarks() {
+    window.PlayerEnhancements.writeSkipMarks(currentVideoTitle, skipMarks);
+    updateSkipSettings();
+}
+
+function updateSkipSettings() {
+    if (!art?.setting || typeof art.setting.update !== 'function') return;
+    const { formatClock } = window.PlayerEnhancements;
+    const items = [
+        {
+            name: 'skip-enabled',
+            html: '跳过片头片尾',
+            switch: skipMarks.enabled,
+            onSwitch(item) {
+                skipMarks.enabled = !item.switch;
+                window.PlayerEnhancements.writeSkipMarks(currentVideoTitle, skipMarks);
+                showShortcutHint(skipMarks.enabled ? '已开启跳过片头片尾' : '已关闭跳过片头片尾', 'right');
+                return skipMarks.enabled;
+            }
+        },
+        {
+            name: 'skip-intro',
+            html: '设当前为片头结束',
+            tooltip: skipMarks.intro ? formatClock(skipMarks.intro) : '未设置',
+            onClick() {
+                const time = Number(art.video.currentTime || 0);
+                if (time < 5) {
+                    showShortcutHint('请播放到片头结束处再设置', 'right');
+                    return skipMarks.intro ? formatClock(skipMarks.intro) : '未设置';
+                }
+                skipMarks.intro = Math.round(time);
+                skipMarks.enabled = true;
+                skipState.introDone = true;
+                saveSkipMarks();
+                showShortcutHint(`片头结束：${formatClock(skipMarks.intro)}`, 'right');
+                return formatClock(skipMarks.intro);
+            }
+        },
+        {
+            name: 'skip-outro',
+            html: '设当前为片尾开始',
+            tooltip: skipMarks.outro ? `最后 ${formatClock(skipMarks.outro)}` : '未设置',
+            onClick() {
+                const duration = Number(art.video.duration);
+                const remaining = duration - Number(art.video.currentTime || 0);
+                if (!Number.isFinite(remaining) || remaining < 5 || remaining > duration / 2) {
+                    showShortcutHint('请播放到片尾开始处再设置', 'right');
+                    return skipMarks.outro ? `最后 ${formatClock(skipMarks.outro)}` : '未设置';
+                }
+                skipMarks.outro = Math.round(remaining);
+                skipMarks.enabled = true;
+                saveSkipMarks();
+                showShortcutHint(`片尾：最后 ${formatClock(skipMarks.outro)}`, 'right');
+                return `最后 ${formatClock(skipMarks.outro)}`;
+            }
+        },
+        {
+            name: 'skip-clear',
+            html: '清除片头片尾标记',
+            tooltip: '',
+            onClick() {
+                skipMarks = { enabled: true, intro: 0, outro: 0 };
+                saveSkipMarks();
+                showShortcutHint('已清除片头片尾标记', 'right');
+                return '';
+            }
+        }
+    ];
+    items.forEach(item => {
+        try { art.setting.update(item); } catch (error) { console.warn('更新播放设置失败:', error); }
+    });
+}
+
+// 每次播放进度更新：跳过片头/片尾，并在临近结尾时预加载下一集
+function handlePlaybackProgress() {
+    if (!art?.video || !skipState.ready) return;
+    const time = Number(art.video.currentTime || 0);
+    const duration = Number(art.video.duration);
+    if (skipMarks.intro && time >= skipMarks.intro - 1) skipState.introDone = true;
+
+    const action = window.PlayerEnhancements.skipAction({ time, duration, marks: skipMarks, ...skipState });
+    if (action === 'intro') {
+        skipState.introDone = true;
+        art.currentTime = skipMarks.intro;
+        showShortcutHint('已跳过片头', 'right');
+    } else if (action === 'outro') {
+        skipState.outroDone = true;
+        if (autoplayEnabled && !nextEpisodeCard?.dismissed && currentEpisodeIndex < currentEpisodes.length - 1) {
+            showShortcutHint('已跳过片尾', 'right');
+            playNextEpisode();
+            return;
+        }
+    }
+
+    const endTime = getEffectiveEndTime();
+    const nextUrl = currentEpisodes[currentEpisodeIndex + 1];
+    if (!skipState.preloaded && nextUrl && time > 5 && Number.isFinite(endTime) && endTime - time <= 60) {
+        skipState.preloaded = true;
+        nextEpisodePreloadController = new AbortController();
+        window.PlayerEnhancements.preloadEpisode(nextUrl, {
+            signal: nextEpisodePreloadController.signal,
+            playlistsOnly: isLowResourcePlaybackDevice()
+        }).catch(() => {});
+    }
+}
+
+// ---- 宽屏双栏：播放器右侧常驻选集栏 ----
+function updateSideEpisodes() {
+    const stage = document.getElementById('playerStage');
+    const aside = document.getElementById('sideEpisodes');
+    if (!stage || !aside || !window.PlayerEnhancements) return;
+    const hasEpisodes = currentEpisodes.length > 1;
+    stage.classList.toggle('has-side-episodes', hasEpisodes);
+    document.querySelector('main')?.classList.toggle('player-layout-wide', hasEpisodes);
+    if (!hasEpisodes) return;
+    if (!sideEpisodeList) {
+        sideEpisodeList = window.PlayerEnhancements.createEpisodeList({
+            container: aside,
+            getEpisodes: () => currentEpisodes,
+            getNames: () => currentEpisodeNames,
+            getIndex: () => currentEpisodeIndex,
+            isReversed: () => episodesReversed,
+            onSelect: index => { if (index !== currentEpisodeIndex) playEpisode(index); }
+        });
+    }
+    sideEpisodeList.render();
 }
 
 function toggleEpisodeDrawer() {
@@ -1594,6 +1743,7 @@ function initPlayer(videoUrl) {
     playbackRestoreApplied = false;
     autoplayMutedNoticeShown = false;
     preferredRateApplied = false;
+    resetEpisodePlaybackState();
 
     // 销毁旧实例
     if (art) {
@@ -1642,7 +1792,8 @@ function initPlayer(videoUrl) {
         playbackRate: true,
         aspectRatio: false,
         fullscreen: true,
-        fullscreenWeb: false,
+        // 桌面端提供“网页全屏”；触屏设备由移动端全屏层接管
+        fullscreenWeb: !isMobilePlaybackDevice(),
         subtitleOffset: false,
         miniProgressBar: true,
         mutex: true,
@@ -1808,6 +1959,7 @@ function initPlayer(videoUrl) {
         }
         updateRateControl();
     });
+    art.video.addEventListener('timeupdate', handlePlaybackProgress);
     art.video.addEventListener('webkitbeginfullscreen', () => maybeLockLandscapeOrientation());
     art.video.addEventListener('webkitendfullscreen', () => unlockLandscapeOrientation());
 
@@ -1884,6 +2036,7 @@ function initPlayer(videoUrl) {
     });
 
     art.on('video:loadedmetadata', function() {
+        skipState.ready = true;
         applyPreferredPlaybackRate();
         if (isPlayerFullscreenActive()) maybeLockLandscapeOrientation();
         document.getElementById('player-loading').style.display = 'none';
@@ -2162,6 +2315,7 @@ function renderEpisodes() {
     episodesList.classList.toggle('episode-list-titled', html.includes('episode-btn-titled'));
     episodeDrawer?.refresh();
     updateEpisodeControlVisibility();
+    updateSideEpisodes();
 }
 
 // 播放指定集数
@@ -2206,6 +2360,7 @@ function playEpisode(index) {
     playbackRestoreApplied = false;
     preferredRateApplied = false;
     nextEpisodeCard?.reset();
+    resetEpisodePlaybackState();
     destroyProgressPreview();
 
     clearVideoProgress();

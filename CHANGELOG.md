@@ -2,6 +2,19 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.30 - 2026-10-27
+
+### Added
+
+- Skip intro and outro per title: in the player settings panel (also in fullscreen), mark "片头结束" and "片尾开始" while watching. Every episode of that title then skips the intro and moves on at the outro. The outro is stored as time before the end, so it fits episodes of different lengths, and the feature can be switched off.
+- The next episode's playlist, init segment and first segment are fetched during the last minute of an episode, so switching starts faster. On data-saver or low-resource devices only the playlists are fetched.
+- Desktop playback offers web fullscreen (网页全屏). Touch devices keep a single fullscreen path.
+- On screens 1280px and wider, series show an always-visible episode column beside a larger player.
+
+### Fixed
+
+- Skipping, preloading and the next-episode countdown wait for the new episode's metadata, so the previous episode's position can no longer skip an extra episode or flash the countdown during a switch.
+
 ## 1.2.29 - 2026-10-27
 
 ### Added

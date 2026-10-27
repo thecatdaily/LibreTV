@@ -11,7 +11,7 @@ async function setup(storageValues = {}) {
     getItem: key => (values.has(key) ? values.get(key) : null),
     setItem: (key, value) => values.set(key, String(value))
   };
-  const sandbox = { window: { localStorage }, console };
+  const sandbox = { window: { localStorage }, console, URL };
   vm.runInNewContext(await read('js/player-enhancements.js'), sandbox);
   return { api: sandbox.window.PlayerEnhancements, values, localStorage };
 }
@@ -93,4 +93,77 @@ test('player wires the drawer, speed control and countdown into the player', asy
   // Touch: single tap toggles controls, double tap plays/pauses.
   assert.match(player, /toggleControlsFromTap/);
   assert.match(mobile, /mobile-fullscreen-episodes/);
+});
+
+test('intro and outro marks are remembered per title and skip only once', async () => {
+  const { api, localStorage } = await setup();
+  assert.deepEqual({ ...api.readSkipMarks('某剧', localStorage) }, { enabled: true, intro: 0, outro: 0 });
+  api.writeSkipMarks(' 某 剧 ', { enabled: true, intro: 90, outro: 120 }, localStorage);
+  const marks = api.readSkipMarks('某剧', localStorage);
+  assert.deepEqual({ ...marks }, { enabled: true, intro: 90, outro: 120 });
+
+  const duration = 2700;
+  assert.equal(api.skipAction({ time: 2, duration, marks, introDone: false, outroDone: false }), 'intro');
+  assert.equal(api.skipAction({ time: 2, duration, marks, introDone: true, outroDone: false }), null);
+  assert.equal(api.skipAction({ time: 1200, duration, marks, introDone: true, outroDone: false }), null);
+  // The outro is stored as seconds before the end, so it fits episodes of any length.
+  assert.equal(api.effectiveEndTime(duration, marks), 2580);
+  assert.equal(api.skipAction({ time: 2581, duration, marks, introDone: true, outroDone: false }), 'outro');
+  assert.equal(api.skipAction({ time: 2581, duration, marks, introDone: true, outroDone: true }), null);
+  // Too-short videos never lose their content to the marks.
+  assert.equal(api.effectiveEndTime(140, marks), 140);
+  assert.equal(api.skipAction({ time: 2, duration: 100, marks, introDone: false, outroDone: false }), null);
+  // Disabled marks do nothing.
+  assert.equal(api.skipAction({ time: 2, duration, marks: { ...marks, enabled: false }, introDone: false, outroDone: false }), null);
+
+  api.writeSkipMarks('某剧', { enabled: true, intro: 0, outro: 0 }, localStorage);
+  assert.deepEqual({ ...api.readSkipMarks('某剧', localStorage) }, { enabled: true, intro: 0, outro: 0 });
+  assert.equal(api.formatClock(125), '2:05');
+});
+
+test('next-episode preload warms the first playlist level, init and first segment', async () => {
+  const { api } = await setup();
+  const responses = {
+    'https://cdn.example/show/ep2.m3u8': '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=800000\nlow/index.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=4000000\nhigh/index.m3u8\n',
+    'https://cdn.example/show/low/index.m3u8': '#EXTM3U\n#EXT-X-MAP:URI="init.mp4"\n#EXTINF:6,\nseg0.m4s\n#EXTINF:6,\nseg1.m4s\n'
+  };
+  const requested = [];
+  const fetchImpl = async url => {
+    requested.push(url);
+    return {
+      ok: true,
+      text: async () => responses[url] || '',
+      arrayBuffer: async () => new ArrayBuffer(8)
+    };
+  };
+  const warmed = await api.preloadEpisode('https://cdn.example/show/ep2.m3u8', { fetchImpl });
+  assert.deepEqual(Array.from(warmed), [
+    'https://cdn.example/show/ep2.m3u8',
+    'https://cdn.example/show/low/index.m3u8',
+    'https://cdn.example/show/low/init.mp4',
+    'https://cdn.example/show/low/seg0.m4s'
+  ]);
+
+  requested.length = 0;
+  const light = await api.preloadEpisode('https://cdn.example/show/ep2.m3u8', { fetchImpl, playlistsOnly: true });
+  assert.equal(light.length, 2);
+  assert.ok(requested.every(url => url.endsWith('.m3u8')));
+
+  assert.equal((await api.preloadEpisode('https://cdn.example/movie.mp4', { fetchImpl })).length, 0);
+});
+
+test('skip, preload and countdown ignore the previous episode time until new metadata loads', async () => {
+  const player = await read('js/player.js');
+  const playerHtml = await read('player.html');
+  const styles = await read('css/player.css');
+  // Right after a switch, video.currentTime still holds the previous episode's
+  // position; acting on it skipped a whole episode at the outro point.
+  assert.match(player, /function handlePlaybackProgress\(\) \{\n    if \(!art\?\.video \|\| !skipState\.ready\) return;/);
+  assert.match(player, /isEnabled: \(\) => autoplayEnabled && skipState\.ready/);
+  assert.match(player, /art\.on\('video:loadedmetadata', function\(\) \{\n        skipState\.ready = true;/);
+  assert.match(player, /name: 'skip-intro'/);
+  assert.match(player, /name: 'skip-outro'/);
+  assert.match(player, /preloadEpisode\(nextUrl/);
+  assert.match(playerHtml, /id="sideEpisodes"/);
+  assert.match(styles, /\.player-stage\.has-side-episodes/);
 });

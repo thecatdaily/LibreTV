@@ -61,6 +61,51 @@
         return Math.min(NEXT_CARD_MAX_SECONDS, duration * 0.15);
     }
 
+    function episodeListMarkup({ episodes, names, current, reversed }) {
+        const order = (episodes || []).map((_, index) => index);
+        if (reversed) order.reverse();
+        const labels = order.map(index => ({ index, ...episodeLabel(index, (names || [])[index]) }));
+        const withTitles = labels.some(item => item.title);
+        return `
+            <div class="player-episode-drawer-list ${withTitles ? 'is-titled' : ''}">
+                ${labels.map(item => `
+                    <button type="button" class="player-episode-item ${item.index === current ? 'is-current' : ''}"
+                            data-episode-index="${item.index}" title="${escapeHtml(item.title || `第 ${item.number} 集`)}"
+                            ${item.index === current ? 'aria-current="true"' : ''}>
+                        <span class="player-episode-number">${item.number}</span>${item.title ? `<span class="player-episode-title">${escapeHtml(item.title)}</span>` : ''}
+                    </button>`).join('')}
+            </div>`;
+    }
+
+    // Always-visible episode column used beside the player on wide screens.
+    function createEpisodeList({ container, getEpisodes, getNames, getIndex, isReversed, onSelect }) {
+        function render() {
+            const episodes = getEpisodes() || [];
+            container.innerHTML = `
+                <div class="player-episode-panel">
+                    <div class="player-episode-drawer-head"><strong>选集</strong><span>共 ${episodes.length} 集</span></div>
+                    ${episodeListMarkup({ episodes, names: getNames(), current: getIndex(), reversed: isReversed?.() })}
+                </div>`;
+            const currentItem = container.querySelector('.is-current');
+            const list = container.querySelector('.player-episode-drawer-list');
+            if (currentItem && list) {
+                list.scrollTop = Math.max(0, currentItem.offsetTop - list.offsetTop - list.clientHeight / 2 + currentItem.offsetHeight / 2);
+            }
+        }
+        const onClick = event => {
+            const item = event.target.closest('[data-episode-index]');
+            if (item) onSelect(Number(item.dataset.episodeIndex));
+        };
+        container.addEventListener('click', onClick);
+        return {
+            render,
+            destroy() {
+                container.removeEventListener('click', onClick);
+                container.innerHTML = '';
+            }
+        };
+    }
+
     // Episode list overlay that lives inside the player so it also works in fullscreen.
     function createEpisodeDrawer({ host, getEpisodes, getNames, getIndex, isReversed, onSelect }) {
         const drawer = document.createElement('div');
@@ -73,25 +118,12 @@
 
         function render() {
             const episodes = getEpisodes() || [];
-            const names = getNames() || [];
-            const current = getIndex();
-            const order = episodes.map((_, index) => index);
-            if (isReversed?.()) order.reverse();
-            const labels = order.map(index => ({ index, ...episodeLabel(index, names[index]) }));
-            const withTitles = labels.some(item => item.title);
             drawer.innerHTML = `
                 <div class="player-episode-drawer-head">
                     <strong>选集</strong><span>共 ${episodes.length} 集</span>
                     <button type="button" class="player-episode-drawer-close" aria-label="关闭选集">✕</button>
                 </div>
-                <div class="player-episode-drawer-list ${withTitles ? 'is-titled' : ''}">
-                    ${labels.map(item => `
-                        <button type="button" class="player-episode-item ${item.index === current ? 'is-current' : ''}"
-                                data-episode-index="${item.index}" title="${escapeHtml(item.title || `第 ${item.number} 集`)}"
-                                ${item.index === current ? 'aria-current="true"' : ''}>
-                            <span class="player-episode-number">${item.number}</span>${item.title ? `<span class="player-episode-title">${escapeHtml(item.title)}</span>` : ''}
-                        </button>`).join('')}
-                </div>`;
+                ${episodeListMarkup({ episodes, names: getNames(), current: getIndex(), reversed: isReversed?.() })}`;
         }
 
         function open() {
@@ -135,7 +167,7 @@
     }
 
     // "Next episode in N s" card shown during the last seconds of an episode.
-    function createNextEpisodeCard({ host, video, getNext, isEnabled, onPlayNext }) {
+    function createNextEpisodeCard({ host, video, getNext, isEnabled, onPlayNext, getEndTime }) {
         const card = document.createElement('div');
         card.className = 'player-next-card';
         card.hidden = true;
@@ -151,8 +183,9 @@
         function update() {
             const next = getNext();
             const duration = Number(video.duration);
+            const endTime = Number(getEndTime?.() ?? duration);
             const threshold = nextCardThreshold(duration);
-            const remaining = duration - Number(video.currentTime || 0);
+            const remaining = endTime - Number(video.currentTime || 0);
             if (!next || !isEnabled() || dismissed || !threshold || remaining > threshold || remaining <= 0 || video.paused) {
                 hide();
                 return;
@@ -206,6 +239,109 @@
         };
     }
 
+    // ---- Skip intro / outro, remembered per title ----
+    const SKIP_STORAGE_KEY = 'libretvSkipMarks';
+    const MIN_CONTENT_AFTER_OUTRO = 30;
+
+    function seriesKey(title) {
+        return String(title || '').trim().toLowerCase().replace(/\s+/g, '');
+    }
+
+    function readSkipMarks(title, storage = window.localStorage) {
+        const fallback = { enabled: true, intro: 0, outro: 0 };
+        try {
+            const all = JSON.parse(storage.getItem(SKIP_STORAGE_KEY) || '{}');
+            const marks = all[seriesKey(title)];
+            if (!marks) return fallback;
+            return {
+                enabled: marks.enabled !== false,
+                intro: Math.max(0, Number(marks.intro) || 0),
+                outro: Math.max(0, Number(marks.outro) || 0)
+            };
+        } catch {
+            return fallback;
+        }
+    }
+
+    function writeSkipMarks(title, marks, storage = window.localStorage) {
+        const key = seriesKey(title);
+        if (!key) return;
+        try {
+            const all = JSON.parse(storage.getItem(SKIP_STORAGE_KEY) || '{}');
+            if (!marks || (!marks.intro && !marks.outro && marks.enabled !== false)) delete all[key];
+            else all[key] = { enabled: marks.enabled !== false, intro: Math.round(marks.intro || 0), outro: Math.round(marks.outro || 0), savedAt: Date.now() };
+            storage.setItem(SKIP_STORAGE_KEY, JSON.stringify(all));
+        } catch {}
+    }
+
+    // The outro is stored as seconds before the end, because episode lengths differ.
+    function effectiveEndTime(duration, marks) {
+        if (!Number.isFinite(duration) || duration <= 0) return duration;
+        if (!marks?.enabled || !(marks.outro > 0) || duration <= marks.outro + MIN_CONTENT_AFTER_OUTRO) return duration;
+        return duration - marks.outro;
+    }
+
+    function skipAction({ time, duration, marks, introDone, outroDone }) {
+        if (!marks?.enabled || !Number.isFinite(time)) return null;
+        if (marks.intro > 0 && !introDone && time < marks.intro - 1 &&
+            (!Number.isFinite(duration) || marks.intro < duration - MIN_CONTENT_AFTER_OUTRO)) {
+            return 'intro';
+        }
+        const end = effectiveEndTime(duration, marks);
+        if (marks.outro > 0 && !outroDone && Number.isFinite(end) && end < duration && time >= end) {
+            return 'outro';
+        }
+        return null;
+    }
+
+    function formatClock(seconds) {
+        const total = Math.max(0, Math.round(Number(seconds) || 0));
+        const minutes = Math.floor(total / 60);
+        return `${minutes}:${String(total % 60).padStart(2, '0')}`;
+    }
+
+    // ---- Next-episode preload: warm the HTTP cache with the playlist and first segment ----
+    function preloadTargets(text, baseUrl) {
+        const lines = String(text || '').split(/\r?\n/).map(line => line.trim());
+        const resolve = uri => new URL(uri, baseUrl).toString();
+        for (let index = 0; index < lines.length; index++) {
+            if (lines[index].startsWith('#EXT-X-STREAM-INF')) {
+                // hls.js starts on the first listed level when it has no bandwidth estimate.
+                const variant = lines.slice(index + 1).find(line => line && !line.startsWith('#'));
+                if (variant) return { playlist: resolve(variant), media: [] };
+            }
+        }
+        const media = [];
+        const map = lines.find(line => line.startsWith('#EXT-X-MAP'))?.match(/URI="([^"]+)"/)?.[1];
+        if (map) media.push(resolve(map));
+        const first = lines.find(line => line && !line.startsWith('#'));
+        if (first) media.push(resolve(first));
+        return { playlist: null, media };
+    }
+
+    async function preloadEpisode(url, { signal, playlistsOnly = false, fetchImpl = fetch } = {}) {
+        let playlistUrl = url;
+        const warmed = [];
+        if (!/\.m3u8(?:$|\?)/i.test(new URL(url).pathname + new URL(url).search)) return warmed;
+        for (let depth = 0; depth < 3 && playlistUrl; depth++) {
+            const response = await fetchImpl(playlistUrl, { signal, mode: 'cors', credentials: 'omit' });
+            if (!response.ok) return warmed;
+            warmed.push(playlistUrl);
+            const targets = preloadTargets(await response.text(), playlistUrl);
+            playlistUrl = targets.playlist;
+            if (!playlistUrl) {
+                if (playlistsOnly) return warmed;
+                for (const mediaUrl of targets.media) {
+                    const media = await fetchImpl(mediaUrl, { signal, mode: 'cors', credentials: 'omit' });
+                    // Reading the body is what stores it in the HTTP cache.
+                    await media.arrayBuffer();
+                    warmed.push(mediaUrl);
+                }
+            }
+        }
+        return warmed;
+    }
+
     window.PlayerEnhancements = {
         PLAYBACK_RATES,
         episodeLabel,
@@ -216,6 +352,15 @@
         rateLabel,
         nextCardThreshold,
         createEpisodeDrawer,
-        createNextEpisodeCard
+        createEpisodeList,
+        createNextEpisodeCard,
+        seriesKey,
+        readSkipMarks,
+        writeSkipMarks,
+        effectiveEndTime,
+        skipAction,
+        formatClock,
+        preloadTargets,
+        preloadEpisode
     };
 })();

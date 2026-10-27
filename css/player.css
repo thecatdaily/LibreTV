@@ -736,6 +736,8 @@ input:checked + .slider:before {
 
 .player-episode-drawer-list {
     display: grid;
+    align-content: start;
+    grid-auto-rows: min-content;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 0.45rem;
     padding: 0.8rem 1rem 1rem;
@@ -896,4 +898,67 @@ input:checked + .slider:before {
 
 #episodesList.episode-list-titled {
     grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)) !important;
+}
+
+/* 网页全屏按钮只在桌面端显示 */
+.art-video-player.player-touch-device .art-control-fullscreenWeb {
+    display: none !important;
+}
+
+/* 宽屏双栏：播放器 + 右侧常驻选集栏 */
+.player-side-episodes {
+    display: none;
+}
+
+@media (min-width: 1280px) {
+    main.player-layout-wide .player-container {
+        max-width: 1600px;
+    }
+
+    .player-stage.has-side-episodes {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+        gap: 1rem;
+        align-items: start;
+        max-width: 1600px;
+        margin: 0 auto 1rem;
+    }
+
+    .player-stage.has-side-episodes #playerContainer {
+        max-width: none;
+        margin: 0;
+    }
+
+    /* 选集栏不参与行高计算，高度始终与播放器一致 */
+    .player-stage.has-side-episodes {
+        align-items: stretch;
+    }
+
+    .player-stage.has-side-episodes .player-side-episodes {
+        display: block;
+        position: relative;
+        min-height: 0;
+        overflow: hidden;
+        border-radius: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.035);
+        color: #eef0ff;
+    }
+
+    .player-side-episodes .player-episode-panel {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .player-side-episodes .player-episode-drawer-list {
+        flex: 1;
+        min-height: 0;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .player-side-episodes .player-episode-drawer-list.is-titled {
+        grid-template-columns: 1fr;
+    }
 }
