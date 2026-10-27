@@ -7,6 +7,7 @@ window.createMobileFullscreenControls = function createMobileFullscreenControls(
     chrome.innerHTML = `
         <div class="mobile-fullscreen-header">
             <span class="mobile-fullscreen-title"></span>
+            <button type="button" class="mobile-fullscreen-episodes" aria-label="选集" hidden>选集</button>
             <button type="button" class="mobile-fullscreen-more" aria-label="更多播放控制">更多</button>
             <button type="button" class="mobile-fullscreen-exit" aria-label="退出全屏">✕</button>
         </div>
@@ -22,6 +23,7 @@ window.createMobileFullscreenControls = function createMobileFullscreenControls(
     player.append(chrome, level);
 
     const titleEl = chrome.querySelector('.mobile-fullscreen-title');
+    const episodesButton = chrome.querySelector('.mobile-fullscreen-episodes');
     const play = chrome.querySelector('.mobile-fullscreen-play');
     const seek = chrome.querySelector('.mobile-fullscreen-seek');
     const time = chrome.querySelector('.mobile-fullscreen-time');
@@ -46,6 +48,7 @@ window.createMobileFullscreenControls = function createMobileFullscreenControls(
 
     function update() {
         titleEl.textContent = options.title() || document.title;
+        episodesButton.hidden = !(options.hasEpisodes?.() && options.onEpisodes);
         play.textContent = video.paused ? '▶' : 'Ⅱ';
         play.setAttribute('aria-label', video.paused ? '继续播放' : '暂停播放');
         const duration = Number.isFinite(video.duration) ? video.duration : 0;
@@ -99,7 +102,7 @@ window.createMobileFullscreenControls = function createMobileFullscreenControls(
     }
 
     function onStart(event) {
-        if (!active || event.touches.length !== 1 || event.target.closest('button, input, .art-controls, .art-setting, .player-top-actions')) return;
+        if (!active || event.touches.length !== 1 || event.target.closest('button, input, .art-controls, .art-setting, .player-top-actions, .player-episode-drawer, .player-next-card')) return;
         const touch = event.touches[0];
         const bounds = player.getBoundingClientRect();
         gesture = {
@@ -168,6 +171,10 @@ window.createMobileFullscreenControls = function createMobileFullscreenControls(
     chrome.querySelector('.mobile-fullscreen-exit').addEventListener('click', () => {
         if (art.fullscreenWeb) art.fullscreenWeb = false;
         else art.fullscreen = false;
+    });
+    episodesButton.addEventListener('click', () => {
+        options.onEpisodes?.();
+        showChrome();
     });
     chrome.querySelector('.mobile-fullscreen-more').addEventListener('click', () => {
         const visible = !player.classList.contains('mobile-fullscreen-native-controls');
