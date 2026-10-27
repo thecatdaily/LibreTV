@@ -1,6 +1,33 @@
 const selectedAPIs = JSON.parse(localStorage.getItem('selectedAPIs') || JSON.stringify(DEFAULT_SELECTED_APIS));
 const customAPIs = JSON.parse(localStorage.getItem('customAPIs') || '[]'); // 存储自定义API列表
 
+// 顶栏搜索：跳到首页的搜索结果（首页会把 ?s= 规范成 /s=）
+function submitPlayerSearch(event) {
+    event?.preventDefault();
+    const input = document.getElementById('playerSearchInput');
+    const query = (input?.value || '').trim();
+    if (!query) {
+        input?.focus();
+        return false;
+    }
+    window.location.href = `/?s=${encodeURIComponent(query)}`;
+    return false;
+}
+
+// 窄屏上搜索框默认收起，点放大镜展开（覆盖标题），失焦且没输入内容时收回
+function togglePlayerSearch(open) {
+    const header = document.querySelector('.lt-player-topbar');
+    const input = document.getElementById('playerSearchInput');
+    if (!header || !input) return;
+    header.classList.toggle('is-searching', open);
+    if (open) {
+        input.focus();
+        input.addEventListener('blur', () => {
+            if (!input.value.trim()) header.classList.remove('is-searching');
+        }, { once: true });
+    }
+}
+
 // 改进返回功能
 function goBack(event) {
     // 防止默认链接行为

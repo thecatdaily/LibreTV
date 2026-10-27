@@ -234,6 +234,62 @@ function showDoubanLoadingOverlay(container) {
     `);
 }
 
+// 找不到播放源的豆瓣条目自动隐藏（可点“显示”看回来）；筛选模式下隐藏太多时自动补一页
+let doubanHiddenCount = 0;
+let doubanAutoLoads = 0;
+let doubanAutoLoadTimer = null;
+const DOUBAN_MIN_VISIBLE = 12;
+
+function updateDoubanHiddenNote() {
+    const note = document.getElementById('douban-hidden-note');
+    if (!note) return;
+    note.hidden = doubanHiddenCount === 0;
+    const count = note.querySelector('[data-hidden-count]');
+    if (count) count.textContent = String(doubanHiddenCount);
+}
+
+function toggleDoubanUnavailable() {
+    const container = document.getElementById('douban-results');
+    const button = document.querySelector('#douban-hidden-note button');
+    if (!container || !button) return;
+    const showing = container.classList.toggle('show-unavailable');
+    button.textContent = showing ? '隐藏' : '显示';
+    button.setAttribute('aria-pressed', String(showing));
+}
+
+function visibleDoubanCards(container) {
+    return [...container.children].filter(card => card.dataset.doubanCard && !card.classList.contains('douban-unavailable')).length;
+}
+
+function maybeAutoLoadMoreDouban(container) {
+    if (!isDoubanFilterMode() || doubanAutoLoads >= 3) return;
+    clearTimeout(doubanAutoLoadTimer);
+    doubanAutoLoadTimer = setTimeout(() => {
+        const moreButton = document.getElementById('douban-more');
+        const canLoadMore = moreButton && moreButton.style.display !== 'none' && !moreButton.disabled;
+        if (canLoadMore && visibleDoubanCards(container) < DOUBAN_MIN_VISIBLE) {
+            doubanAutoLoads++;
+            loadDoubanFilterResults(false);
+        }
+    }, 800);
+}
+
+function checkDoubanCardAvailability(card, item, container) {
+    if (!window.SourceAvailability) return;
+    window.SourceAvailability.check({
+        title: item.title,
+        year: item.year || '',
+        kind: doubanMovieTvCurrentSwitch,
+        isWanted: () => card.isConnected
+    }).then(available => {
+        if (available !== false || !card.isConnected) return;
+        card.classList.add('douban-unavailable');
+        doubanHiddenCount++;
+        updateDoubanHiddenNote();
+        maybeAutoLoadMoreDouban(container);
+    });
+}
+
 let doubanInitialized = false;
 // 最近一次推荐请求的序号：只有最新请求的结果会被渲染
 let doubanRenderSeq = 0;
@@ -853,9 +909,7 @@ function renderDoubanCards(data, container, options = {}) {
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;');
             
-            const safeRate = (item.rate || "暂无")
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;');
+            const safeRate = escapeHtmlAttr(item.rate || '');
             
             const originalCoverUrl = normalizeImageUrl(item.cover);
             const safeCoverUrl = escapeHtmlAttr(originalCoverUrl);
@@ -868,9 +922,10 @@ function renderDoubanCards(data, container, options = {}) {
                         onerror="window.setImageProxyFallback(this, this.dataset.originalSrc, '暂无封面')"
                         loading="lazy" referrerpolicy="no-referrer">
                     <div class="absolute inset-0 bg-gradient-to-t from-black to-transparent opacity-60"></div>
-                    <div class="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded-sm">
+                    ${safeRate ? `<div class="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded-sm">
                         <span class="text-yellow-400">★</span> ${safeRate}
-                    </div>
+                    </div>` : ''}
+                    <div class="douban-unavailable-badge">暂无播放源</div>
                     <div class="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded-sm hover:bg-[#333] transition-colors">
                         <a href="${escapeHtmlAttr(item.url)}" target="_blank" rel="noopener noreferrer" title="在豆瓣查看" onclick="event.stopPropagation();">
                             🔗
@@ -896,10 +951,18 @@ function renderDoubanCards(data, container, options = {}) {
                 LibreExperience.addWatchLater({title:item.title,year:item.year || '',kind:doubanMovieTvCurrentSwitch === 'tv' ? 'tv' : 'movie'});
                 showToast('已加入稍后看', 'success');
             });
+            card.dataset.doubanCard = 'true';
             fragment.appendChild(card);
+            if (options.checkAvailability !== false) checkDoubanCardAvailability(card, item, container);
         });
     }
     
+    if (!options.append) {
+        doubanHiddenCount = 0;
+        doubanAutoLoads = 0;
+        updateDoubanHiddenNote();
+    }
+
     // 加载更多时追加到末尾（空结果不追加提示）；否则清空后替换
     if (options.append) {
         container.querySelector('.douban-loading-overlay')?.remove();
