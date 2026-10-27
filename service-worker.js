@@ -1,4 +1,4 @@
-const APP_VERSION = '202610272000';
+const APP_VERSION = '202610272100';
 const APP_SHELL_CACHE = `libretv-shell-${APP_VERSION}`;
 const OFFLINE_URL = '/offline.html';
 
