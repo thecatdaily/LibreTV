@@ -1242,15 +1242,16 @@ test('release metadata is bumped for this update', async () => {
 
   const changelog = await readProjectFile('CHANGELOG.md');
 
-  assert.equal(packageJson.version, '1.2.42');
-  assert.equal(lockJson.version, '1.2.42');
-  assert.equal(lockJson.packages[''].version, '1.2.42');
-  assert.match(config, /version:\s*'1\.2\.42'/);
-  assert.match(serviceWorker, /const APP_VERSION = '202610281100'/);
+  assert.equal(packageJson.version, '1.2.43');
+  assert.equal(lockJson.version, '1.2.43');
+  assert.equal(lockJson.packages[''].version, '1.2.43');
+  assert.match(config, /version:\s*'1\.2\.43'/);
+  assert.match(serviceWorker, /const APP_VERSION = '202610281130'/);
   assert.match(serviceWorker, /'\/js\/player-recommendations\.js'/);
   assert.match(serviceWorker, /'\/js\/mobile-fullscreen\.js'/);
   assert.match(serviceWorker, /'\/css\/theme\.css'/);
   assert.match(serviceWorker, /'\/js\/source-speed\.js'/);
+  assert.match(changelog, /## 1\.2\.43 - 2026-10-28[\s\S]*?下载本集/);
   assert.match(changelog, /## 1\.2\.42 - 2026-10-28[\s\S]*?Stats for nerds/);
   assert.match(changelog, /## 1\.2\.41 - 2026-10-28[\s\S]*?people who liked this also liked/);
   assert.match(changelog, /## 1\.2\.40 - 2026-10-28[\s\S]*?every version/);
