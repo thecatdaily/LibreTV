@@ -7,8 +7,12 @@
     const MODES = {
         off: { label: '关闭' },
         standard: { label: '标准', sharpness: 0.25 },   // RCAS "stops": 0 is the sharpest
-        sharp: { label: '锐利', sharpness: 0.0 }
+        sharp: { label: '锐利', sharpness: 0.0 },
+        // TC / low-bitrate copies: deblock + denoise and automatic levels before upscaling, then gentle sharpening.
+        restore: { label: '低画质修复', sharpness: 0.6, restore: true }
     };
+    const STATS_SIZE = { width: 64, height: 36 };
+    const STATS_INTERVAL_MS = 1000;
     const MAX_PIXELS = 3840 * 2160;
     const MAX_DPR = 2;
 
@@ -148,6 +152,62 @@ void main() {
     color = vec4(clamp((lobe * (b + d + f + h) + e) * rcpL, 0.0, 1.0), 1.0);
 }`;
 
+    // Edge-preserving smoothing at source resolution: neighbours count by distance and by how close their
+    // brightness is, so compression blocks and noise (small steps) are smoothed while real edges stay.
+    // Then the automatic levels stretch a washed-out picture and saturation is lifted a little.
+    const RESTORE = `#version 300 es
+precision highp float;
+uniform sampler2D source;
+uniform vec2 levels;
+uniform float saturation;
+out vec4 color;
+
+const vec3 Y = vec3(0.299, 0.587, 0.114);
+vec3 tap(ivec2 p) { return texelFetch(source, clamp(p, ivec2(0), textureSize(source, 0) - 1), 0).rgb; }
+
+void main() {
+    ivec2 p = ivec2(gl_FragCoord.xy);
+    vec3 center = tap(p);
+    float centerY = dot(center, Y);
+    vec3 sum = vec3(0.0);
+    float weights = 0.0;
+    for (int y = -2; y <= 2; y++) {
+        for (int x = -2; x <= 2; x++) {
+            vec3 sample_ = tap(p + ivec2(x, y));
+            float d = dot(sample_, Y) - centerY;
+            float w = exp(-float(x * x + y * y) / 4.5) * exp(-d * d / 0.0128);
+            sum += sample_ * w;
+            weights += w;
+        }
+    }
+    vec3 c = mix(center, sum / weights, 0.85);
+    c = clamp((c - levels.x) / max(levels.y - levels.x, 0.05), 0.0, 1.0);
+    float l = dot(c, Y);
+    color = vec4(clamp(mix(vec3(l), c, saturation), 0.0, 1.0), 1.0);
+}`;
+
+    // Black and white points from a small RGBA thumbnail: 1st and 99th percentile of luma, leaving out
+    // letterbox black. Bounded so a dark or bright scene is never pushed to an extreme.
+    function computeLevels(rgba) {
+        const lumas = [];
+        for (let i = 0; i < rgba.length; i += 4) {
+            const y = (0.299 * rgba[i] + 0.587 * rgba[i + 1] + 0.114 * rgba[i + 2]) / 255;
+            if (y > 0.02) lumas.push(y);
+        }
+        if (lumas.length < rgba.length / 4 * 0.2) return { lo: 0, hi: 1 };
+        lumas.sort((a, b) => a - b);
+        let lo = Math.min(lumas[Math.floor(lumas.length * 0.01)], 0.2);
+        let hi = Math.max(lumas[Math.ceil(lumas.length * 0.99) - 1], 0.75);
+        if (hi - lo < 0.5) lo = Math.max(0, hi - 0.5);
+        return { lo, hi };
+    }
+
+    // Gradual changes, so levels follow a scene without flickering.
+    function blendLevels(previous, next, amount = 0.3) {
+        if (!previous) return next;
+        return { lo: previous.lo + (next.lo - previous.lo) * amount, hi: previous.hi + (next.hi - previous.hi) * amount };
+    }
+
     function readMode() {
         try { const mode = localStorage.getItem(STORAGE_KEY); return MODES[mode] ? mode : 'off'; } catch { return 'off'; }
     }
@@ -220,7 +280,13 @@ void main() {
         let gl = null;
         let easu = null;
         let rcas = null;
+        let restore = null;
         let sourceTexture = null;
+        let restoreTexture = null;
+        let statsTexture = null;
+        let restoreSize = '';
+        let levels = null;
+        let statsAt = 0;
         let middleTexture = null;
         let framebuffer = null;
         let mode = 'off';
@@ -239,6 +305,7 @@ void main() {
             if (!gl) return false;
             easu = program(gl, EASU);
             rcas = program(gl, RCAS);
+            restore = program(gl, RESTORE);
             const buffer = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
             gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
@@ -246,6 +313,9 @@ void main() {
             gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
             sourceTexture = texture(gl, gl.LINEAR);
             middleTexture = texture(gl, gl.NEAREST);
+            restoreTexture = texture(gl, gl.LINEAR);
+            statsTexture = texture(gl, gl.NEAREST);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, STATS_SIZE.width, STATS_SIZE.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
             framebuffer = gl.createFramebuffer();
             canvas.addEventListener('webglcontextlost', event => { event.preventDefault(); stop(); gl = null; }, { once: true });
             return true;
@@ -279,13 +349,33 @@ void main() {
                 notify('这个视频的来源不允许画质增强，已恢复原画');
                 return;
             }
+            let input = sourceTexture;
+            if (MODES[mode].restore) {
+                updateLevels(width, height);
+                if (restoreSize !== `${width}x${height}`) {
+                    restoreSize = `${width}x${height}`;
+                    gl.bindTexture(gl.TEXTURE_2D, restoreTexture);
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+                }
+                gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, restoreTexture, 0);
+                gl.viewport(0, 0, width, height);
+                gl.useProgram(restore);
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, sourceTexture);
+                gl.uniform1i(gl.getUniformLocation(restore, 'source'), 0);
+                gl.uniform2f(gl.getUniformLocation(restore, 'levels'), levels.lo, levels.hi);
+                gl.uniform1f(gl.getUniformLocation(restore, 'saturation'), 1.1);
+                gl.drawArrays(gl.TRIANGLES, 0, 3);
+                input = restoreTexture;
+            }
             // Pass 1: EASU to the display size.
             gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
             gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, middleTexture, 0);
             gl.viewport(0, 0, size.width, size.height);
             gl.useProgram(easu);
             gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, sourceTexture);
+            gl.bindTexture(gl.TEXTURE_2D, input);
             gl.uniform1i(gl.getUniformLocation(easu, 'source'), 0);
             gl.uniform2f(gl.getUniformLocation(easu, 'sourceSize'), width, height);
             gl.uniform2f(gl.getUniformLocation(easu, 'outputSize'), size.width, size.height);
@@ -301,6 +391,27 @@ void main() {
             // Follow the brightness gesture of the mobile fullscreen layer.
             if (canvas.style.filter !== video.style.filter) canvas.style.filter = video.style.filter;
             last = { source: `${width}×${height}`, output: `${size.width}×${size.height}` };
+        }
+
+        // Once a second: draw the frame into a 64×36 thumbnail and read it back for the level statistics.
+        function updateLevels(width, height) {
+            const now = performance.now();
+            if (levels && now - statsAt < STATS_INTERVAL_MS) return;
+            statsAt = now;
+            gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, statsTexture, 0);
+            gl.viewport(0, 0, STATS_SIZE.width, STATS_SIZE.height);
+            gl.useProgram(easu);
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, sourceTexture);
+            gl.uniform1i(gl.getUniformLocation(easu, 'source'), 0);
+            gl.uniform2f(gl.getUniformLocation(easu, 'sourceSize'), width, height);
+            gl.uniform2f(gl.getUniformLocation(easu, 'outputSize'), STATS_SIZE.width, STATS_SIZE.height);
+            gl.uniform1i(gl.getUniformLocation(easu, 'upscale'), 0);
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+            const pixels = new Uint8Array(STATS_SIZE.width * STATS_SIZE.height * 4);
+            gl.readPixels(0, 0, STATS_SIZE.width, STATS_SIZE.height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+            levels = blendLevels(levels, computeLevels(pixels));
         }
 
         function loop() {
@@ -365,6 +476,7 @@ void main() {
             if (remember) writeMode(wanted);
             stop();
             mode = 'off';
+            levels = null;
             if (wanted !== 'off') {
                 try {
                     if (!setup()) { notify('这个浏览器不支持 WebGL2，无法开启画质增强'); return 'off'; }
@@ -390,7 +502,8 @@ void main() {
             get mode() { return mode; },
             describe() {
                 if (mode === 'off') return '关闭';
-                return `${MODES[mode].label}（FSR 1.0${last.source ? `，${last.source} → ${last.output}` : ''}）`;
+                const steps = MODES[mode].restore ? `去块降噪 + 自动对比度${levels ? `（${Math.round(levels.lo * 255)}–${Math.round(levels.hi * 255)}）` : ''} + FSR 1.0` : 'FSR 1.0';
+                return `${MODES[mode].label}（${steps}${last.source ? `，${last.source} → ${last.output}` : ''}）`;
             },
             // The processed frame as an image, e.g. for tests or screenshots.
             capture() {
@@ -410,5 +523,5 @@ void main() {
         };
     }
 
-    window.VideoEnhance = { create, isSupported, readMode, writeMode, MODES, logic: { contentRect, outputSize } };
+    window.VideoEnhance = { create, isSupported, readMode, writeMode, MODES, logic: { contentRect, outputSize, computeLevels, blendLevels } };
 })();

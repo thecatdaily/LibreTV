@@ -36,7 +36,8 @@ test('the chosen mode is remembered and unknown values fall back to off', async 
   const { api, values } = await load();
   api.writeMode('standard');
   assert.equal(values.get('videoEnhanceMode'), 'standard');
-  assert.deepEqual(Object.keys(api.MODES), ['off', 'standard', 'sharp']);
+  assert.deepEqual(Object.keys(api.MODES), ['off', 'standard', 'sharp', 'restore']);
+  assert.equal(api.MODES.restore.label, '低画质修复');
 });
 
 test('the shaders are FSR 1.0 EASU + RCAS and the player offers the setting', async () => {
@@ -54,4 +55,28 @@ test('the shaders are FSR 1.0 EASU + RCAS and the player offers the setting', as
   const html = await read('player.html');
   assert.ok(html.indexOf('js/video-enhance.js') < html.indexOf('js/player.js"'));
   assert.match(await read('service-worker.js'), /'\/js\/video-enhance\.js'/);
+});
+
+test('low-quality restore stretches washed-out pictures but leaves good ones and letterbox black alone', async () => {
+  const { computeLevels, blendLevels } = (await load()).api.logic;
+  const frame = lumas => Uint8Array.from(lumas.flatMap(y => [y, y, y, 255]));
+  const spread = (from, to, count) => Array.from({ length: count }, (_, i) => Math.round(from + (to - from) * i / (count - 1)));
+  // A grey TC picture (luma 60–180) inside black bars: the bars are ignored, the picture is stretched.
+  const tc = plain(computeLevels(frame([...Array(400).fill(0), ...spread(60, 180, 1000)])));
+  assert.equal(tc.lo, 0.2, 'grey blacks are lifted out, up to 0.2');
+  assert.equal(tc.hi, 0.75, 'the white point is never pulled below 0.75');
+  // A well-exposed picture keeps (almost) its full range.
+  const good = plain(computeLevels(frame(spread(3, 252, 1000))));
+  assert.ok(good.lo < 0.04 && good.hi > 0.97, JSON.stringify(good));
+  // Dark scenes are not brightened to grey: the stretch is limited.
+  const dark = plain(computeLevels(frame(spread(10, 70, 1000))));
+  assert.ok(dark.hi - dark.lo >= 0.5);
+  // Mostly black frames (fades) change nothing.
+  assert.deepEqual(plain(computeLevels(frame([...Array(900).fill(0), ...spread(20, 200, 100)]))), { lo: 0, hi: 1 });
+  // Levels move gradually.
+  const blended = blendLevels({ lo: 0, hi: 1 }, { lo: 0.2, hi: 0.8 });
+  assert.ok(Math.abs(blended.lo - 0.06) < 1e-9 && Math.abs(blended.hi - 0.94) < 1e-9);
+  assert.deepEqual(plain(blendLevels(null, { lo: 0.2, hi: 0.8 })), { lo: 0.2, hi: 0.8 });
+  const code = await read('js/video-enhance.js');
+  assert.match(code, /const RESTORE = `#version 300 es/);
 });
