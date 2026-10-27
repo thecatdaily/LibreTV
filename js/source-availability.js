@@ -29,11 +29,11 @@
         return now - entry.at < (entry.ok ? FOUND_TTL : MISSING_TTL) ? entry.ok : undefined;
     }
 
-    function remember(key, ok) {
+    function remember(key, ok, cover = '') {
         try {
             const cache = readCache();
             delete cache[key];
-            cache[key] = { ok, at: Date.now() };
+            cache[key] = cover ? { ok, at: Date.now(), cover } : { ok, at: Date.now() };
             const keys = Object.keys(cache);
             for (const old of keys.slice(0, Math.max(0, keys.length - CACHE_LIMIT))) delete cache[old];
             localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
@@ -78,6 +78,7 @@
         });
     }
 
+    // { ok: true|false|null, cover }: the cover of the playable copy stands in when Douban has no poster yet.
     async function searchSources(request) {
         let reached = 0;
         for (const id of selectedSources()) {
@@ -85,11 +86,12 @@
             try {
                 const data = await window.fetchVodApiJson(context.apiBaseUrl + API_CONFIG.search.path + encodeURIComponent(request.title));
                 if (data) reached++;
-                if ((Array.isArray(data?.list) ? data.list : []).some(item => isPlayableMatch(item, request))) return true;
+                const match = (Array.isArray(data?.list) ? data.list : []).find(item => isPlayableMatch(item, request));
+                if (match) return { ok: true, cover: (window.normalizeImageUrl ? window.normalizeImageUrl(match.vod_pic, context.apiBaseUrl) : match.vod_pic) || '' };
             } catch { /* this source is down; try the next one */ }
         }
         // No source answered at all: unknown, keep the title visible.
-        return reached ? false : null;
+        return { ok: reached ? false : null, cover: '' };
     }
 
     function pump() {
@@ -116,10 +118,10 @@
                         resolve(null);
                         return;
                     }
-                    const result = await searchSources(request).catch(() => null);
-                    if (result !== null) remember(key, result);
+                    const { ok, cover } = await searchSources(request).catch(() => ({ ok: null, cover: '' }));
+                    if (ok !== null) remember(key, ok, cover);
                     pending.delete(key);
-                    resolve(result);
+                    resolve(ok);
                 });
                 // Start on the next tick: callers often ask before attaching the card to the page.
                 setTimeout(pump, 0);
@@ -128,5 +130,10 @@
         return pending.get(key);
     }
 
-    window.SourceAvailability = { check, isPlayableMatch, cacheKey };
+    // Cover of the playable copy found by check(), if any.
+    function coverOf(request) {
+        return readCache()[cacheKey(request)]?.cover || '';
+    }
+
+    window.SourceAvailability = { check, coverOf, isPlayableMatch, cacheKey };
 })();

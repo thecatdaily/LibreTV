@@ -145,46 +145,5 @@
         return [...found.values()].sort((a, b) => releaseValue(a) - releaseValue(b) ||
             String(a.vod_name).localeCompare(String(b.vod_name), 'zh-Hans-CN'));
     }
-    function metric(value) {
-        const raw = String(value ?? '').replace(/,/g, '').trim();
-        const match = raw.match(/^(\d+(?:\.\d+)?)(万|亿)?$/);
-        return match ? Number(match[1]) * ({'万':10000,'亿':100000000}[match[2]] || 1) : null;
-    }
-    function relatedRecommendations(items, current) {
-        const found = new Map();
-        const currentStem = seriesStem(current.title, current.kind);
-        for (const item of items || []) {
-            const info = identity(item);
-            if (info.kind !== current.kind || !info.title) continue;
-            if (currentStem && seriesStem(info.title, info.kind) === currentStem) continue;
-            if (/解说|预告|花絮|剪辑/.test(`${info.title} ${item.type_name || ''}`)) continue;
-            if (current.type && normalize(item.type_name || item.type) !== normalize(current.type) &&
-                !(current.categoryId && String(item.type_id) === String(current.categoryId))) continue;
-            const key = [normalize(info.title), info.year, info.kind].join('|');
-            if (!found.has(key)) found.set(key, { ...item });
-            else {
-                const saved = found.get(key);
-                const score = [metric(saved.vod_score ?? saved.rate ?? saved.rating), metric(item.vod_score ?? item.rate ?? item.rating)].filter(value => value !== null);
-                const hits = [metric(saved.vod_hits ?? saved.vod_hits_all ?? saved.hits), metric(item.vod_hits ?? item.vod_hits_all ?? item.hits)].filter(value => value !== null);
-                if (item.source_code && item.vod_id && !(saved.source_code && saved.vod_id)) {
-                    const cover = saved.vod_pic;
-                    Object.assign(saved, item);
-                    if (!saved.vod_pic) saved.vod_pic = cover;
-                }
-                if (score.length) saved.vod_score = Math.max(...score);
-                if (hits.length) saved.vod_hits = Math.max(...hits);
-            }
-        }
-        const rank = item => {
-            const hits = metric(item.vod_hits ?? item.vod_hits_all ?? item.hits);
-            const score = metric(item.vod_score ?? item.rate ?? item.rating);
-            return [hits > 0 ? 2 : score > 0 ? 1 : 0, hits || 0, score || 0, -releaseValue(item)];
-        };
-        return [...found.values()].sort((a, b) => {
-            const left = rank(a), right = rank(b);
-            for (let i = 0; i < left.length; i++) if (left[i] !== right[i]) return right[i] - left[i];
-            return 0;
-        });
-    }
-    window.LibreExperience = { groupResults, unfinishedHistory, watchLater, addWatchLater, removeWatchLater, recordQuality, recordStall, qualityScore, chooseCandidate, versionLabel, versionRank, versionTag, versionLabels, year, seriesStem, franchiseRecommendations, relatedRecommendations };
+    window.LibreExperience = { groupResults, unfinishedHistory, watchLater, addWatchLater, removeWatchLater, recordQuality, recordStall, qualityScore, chooseCandidate, versionLabel, versionRank, versionTag, versionLabels, year, seriesStem, franchiseRecommendations };
 })();

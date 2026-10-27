@@ -69,6 +69,12 @@ test('availability checks stop at the first source that has it and are cached', 
   assert.equal(await down.api.check({ title: '某片', kind: 'movie' }), null, 'unknown when no source answered');
   assert.equal(down.storage.values.has('sourceAvailabilityV1'), false, 'unknown results are not cached');
 
+  // The playable copy's cover is kept for titles Douban has no poster for yet.
+  const withCover = await loadAvailability({ responses: { a: { list: [{ ...found.list[0], vod_name: '新片', vod_pic: 'https://img.example/new.jpg' }] } } });
+  assert.equal(await withCover.api.check({ title: '新片', year: '2026', kind: 'movie' }), true);
+  assert.equal(withCover.api.coverOf({ title: '新片', year: '2026', kind: 'movie' }), 'https://img.example/new.jpg');
+  assert.equal(withCover.api.coverOf({ title: '别的片', kind: 'movie' }), '');
+
   const skipped = await loadAvailability();
   assert.equal(await skipped.api.check({ title: '某片', kind: 'movie', isWanted: () => false }), null);
   assert.equal(skipped.calls.length, 0, 'cards that are gone are not searched');
@@ -109,4 +115,52 @@ test('player page header, layout and error overlay', async () => {
   const index = await read('index.html');
   assert.match(index, /<script src="js\/source-availability\.js"><\/script>/);
   assert.match(await read('service-worker.js'), /'\/js\/source-availability\.js'/);
+});
+
+async function loadRecommendations() {
+  const sandbox = { window: {}, console, URL };
+  for (const file of ['js/experience.js', 'js/douban-filter.js', 'js/player-recommendations.js']) vm.runInNewContext(await read(file), sandbox);
+  return sandbox.window.PlayerRecommendations.logic;
+}
+
+test('similar titles come from Douban "people who liked this also liked", in Douban order', async () => {
+  const { relatedList } = await loadRecommendations();
+  const subject = (id, title, type = 'tv', year = '2024') => ({ id: String(id), title, type, year, card_subtitle: `${year} / 中国大陆 / 剧情`, rating: { value: 8.5 }, pic: { large: `https://img.doubanio.com/${id}.jpg` } });
+  const list = relatedList([
+    subject(1, '漫长的季节', 'tv', '2023'), subject(2, '繁花'), subject(3, '繁花第二季'), subject(1, '漫长的季节', 'tv', '2023'),
+    subject(4, '我的阿勒泰'), { id: '5', title: '某书', type: 'book' }, subject(6, '封神第一部：朝歌风云', 'movie', '2023'), subject(7, '凡人歌')
+  ], { title: '繁花', kind: 'tv', doubanId: 2 });
+  assert.deepEqual(list.map(item => item.vod_name), ['漫长的季节', '我的阿勒泰', '封神第一部：朝歌风云', '凡人歌']);
+  assert.equal(list[0].vod_douban_id, '1');
+  assert.equal(list[0].vod_douban_score, 8.5);
+  assert.equal(list[0].vod_year, '2023');
+  // A recommended film keeps its own kind, so playing it searches for a film.
+  assert.equal(list[2].kind, 'movie');
+  assert.ok(list.length <= 16);
+});
+
+test('without a Douban ID, the fallback uses the same genre and region', async () => {
+  const { fallbackFilter } = await loadRecommendations();
+  assert.deepEqual(JSON.parse(JSON.stringify(fallbackFilter({ className: '剧情,犯罪', type: '国产剧', area: '大陆' }, 'tv'))), { genre: '剧情', region: '中国大陆' });
+  assert.deepEqual(JSON.parse(JSON.stringify(fallbackFilter({ className: '', type: '动作片', area: '中国香港' }, 'movie'))), { genre: '动作', region: '香港' });
+  assert.deepEqual(JSON.parse(JSON.stringify(fallbackFilter({ className: '科幻', type: '欧美剧', area: '' }, 'tv'))), { genre: '科幻', region: '欧美' });
+  assert.deepEqual(JSON.parse(JSON.stringify(fallbackFilter({ type: '韩剧' }, 'tv'))), { genre: '', region: '韩国' });
+  assert.deepEqual(JSON.parse(JSON.stringify(fallbackFilter({ type: '电影', area: '火星' }, 'movie'))), { genre: '', region: '' });
+
+  const code = await read('js/player-recommendations.js');
+  assert.match(code, /rexxar\/api\/v2\/\$\{type\}\/\$\{id\}\/recommendations/);
+  assert.doesNotMatch(code, /search_subjects/, 'the broad popularity list is gone');
+  const html = await read('player.html');
+  assert.ok(html.indexOf('js/douban-filter.js') < html.indexOf('js/player-recommendations.js'));
+  assert.match(html, /<b id="relatedTitle">相似推荐<\/b> <span id="relatedNote">看过的人也喜欢<\/span>/);
+});
+
+test('Douban cards replace the generic no-poster picture and say when a title has no rating yet', async () => {
+  const douban = await read('js/douban.js');
+  const isDefault = new Function(`${douban.match(/function isDoubanDefaultPoster[\s\S]*?\n}/)[0]}; return isDoubanDefaultPoster;`)();
+  assert.equal(isDefault('https://img3.doubanio.com/f/frodo/18c01f9a/pics/subject/movie_normal.png'), true);
+  assert.equal(isDefault('https://img9.doubanio.com/view/photo/s_ratio_poster/public/p2934585536.jpg'), false);
+  assert.match(douban, /SourceAvailability\.coverOf\(request\)/);
+  assert.match(douban, /douban-unrated-badge[^>]*>暂无评分</);
+  assert.match(await read('js/player-recommendations.js'), /SourceAvailability\.coverOf\(request\)/);
 });
