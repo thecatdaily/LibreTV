@@ -1083,7 +1083,9 @@ test('player cast, menu hotzone, fullscreen, and duplicate controls are wired', 
   assert.doesNotMatch(player, /art\.video\.addEventListener\('dblclick'/);
 
   assert.match(player, /function toggleFullscreenMode/);
-  assert.match(player, /e\.altKey && e\.key === 'Enter'/);
+  const enhancements = await readProjectFile('js/player-enhancements.js');
+  assert.match(enhancements, /if \(event\.altKey\) \{\n\s*if \(key === 'Enter'\) return \{ type: 'fullscreen' \}/);
+  assert.match(player, /window\.PlayerEnhancements\.shortcutAction\(e\)/);
   assert.match(player, /function maybeLockLandscapeOrientation/);
   assert.match(player, /function unlockLandscapeOrientation/);
   assert.match(player, /screen\.orientation\.lock\('landscape'\)/);
@@ -1235,15 +1237,16 @@ test('release metadata is bumped for this update', async () => {
 
   const changelog = await readProjectFile('CHANGELOG.md');
 
-  assert.equal(packageJson.version, '1.2.30');
-  assert.equal(lockJson.version, '1.2.30');
-  assert.equal(lockJson.packages[''].version, '1.2.30');
-  assert.match(config, /version:\s*'1\.2\.30'/);
-  assert.match(serviceWorker, /const APP_VERSION = '202610271200'/);
+  assert.equal(packageJson.version, '1.2.31');
+  assert.equal(lockJson.version, '1.2.31');
+  assert.equal(lockJson.packages[''].version, '1.2.31');
+  assert.match(config, /version:\s*'1\.2\.31'/);
+  assert.match(serviceWorker, /const APP_VERSION = '202610271400'/);
   assert.match(serviceWorker, /'\/js\/player-recommendations\.js'/);
   assert.match(serviceWorker, /'\/js\/mobile-fullscreen\.js'/);
   assert.match(serviceWorker, /'\/css\/theme\.css'/);
   assert.match(serviceWorker, /'\/js\/source-speed\.js'/);
+  assert.match(changelog, /## 1\.2\.31 - 2026-10-27[\s\S]*?Keyboard shortcuts/);
   assert.match(changelog, /## 1\.2\.30 - 2026-10-27[\s\S]*?Skip intro and outro/);
   assert.match(changelog, /## 1\.2\.29 - 2026-10-27[\s\S]*?in-player episode list/);
   assert.match(changelog, /## 1\.2\.24 - 2026-10-10[\s\S]*?Douban recommendations load once/);
