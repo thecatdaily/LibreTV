@@ -685,6 +685,88 @@ html body #douban-tags button.bg-pink-600 {
     box-shadow: 0 8px 22px -8px rgba(139, 92, 246, 0.85);
 }
 
+/* 豆瓣组合筛选面板 */
+.douban-filter-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    margin-top: 0.6rem;
+    padding: 0.75rem 0.85rem;
+    border-radius: 16px;
+    background: var(--lt-surface);
+    border: 1px solid var(--lt-line);
+}
+
+.douban-filter-panel[hidden] { display: none; }
+
+.douban-filter-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+}
+
+.douban-filter-label {
+    flex: none;
+    width: 2.6rem;
+    padding-top: 0.28rem;
+    font-size: 0.8rem;
+    color: var(--lt-faint);
+}
+
+.douban-filter-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 0.35rem;
+    min-width: 0;
+}
+
+html body .douban-filter-options button {
+    padding: 0.22rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    color: var(--lt-muted);
+    background: transparent;
+    border: 1px solid transparent;
+    transition: color 0.2s, background 0.2s, border-color 0.2s;
+}
+
+html body .douban-filter-options button:hover {
+    color: var(--lt-text);
+    background: var(--lt-surface-3);
+}
+
+html body .douban-filter-options button.is-active {
+    color: #fff;
+    background: rgba(139, 92, 246, 0.28);
+    border-color: rgba(139, 92, 246, 0.6);
+}
+
+@media (max-width: 640px) {
+    /* 手机上每一行横向滚动，避免面板过高 */
+    .douban-filter-options {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+    .douban-filter-options::-webkit-scrollbar { display: none; }
+    html body .douban-filter-options button { flex: none; }
+}
+
+.douban-card-meta {
+    margin-top: 0.15rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.72rem;
+    color: var(--lt-faint);
+}
+
+.douban-more-wrap {
+    display: flex;
+    justify-content: center;
+    margin-top: 1.25rem;
+}
+
 /* 豆瓣卡片 */
 #douban-results {
     gap: 1rem;
@@ -750,6 +832,117 @@ html body #douban-results button:hover { color: #c4b5fd; }
 .lt-results-meta #searchResultsCount {
     font-weight: 700;
     color: var(--lt-text);
+}
+
+/* 搜索结果筛选排序栏 */
+.search-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem 1rem;
+    margin-bottom: 1rem;
+}
+
+.search-filter-bar[hidden] { display: none; }
+
+.search-filter-kinds,
+.search-filter-selects {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+html body .search-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.3rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    color: var(--lt-muted);
+    background: var(--lt-surface);
+    border: 1px solid var(--lt-line);
+    transition: color 0.2s, background 0.2s, border-color 0.2s;
+}
+
+html body .search-filter-chip small {
+    font-size: 0.7rem;
+    color: var(--lt-faint);
+}
+
+html body .search-filter-chip:hover {
+    color: var(--lt-text);
+    border-color: var(--lt-line-strong);
+}
+
+html body .search-filter-chip.is-active {
+    color: #fff;
+    background: var(--lt-grad);
+    border-color: transparent;
+}
+
+html body .search-filter-chip.is-active small { color: rgba(255, 255, 255, 0.8); }
+
+.search-filter-select select {
+    padding: 0.32rem 1.9rem 0.32rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    color: var(--lt-text);
+    background: var(--lt-surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1a5c0' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 0.7rem center;
+    border: 1px solid var(--lt-line);
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+}
+
+.search-filter-select select:focus-visible {
+    outline: 2px solid rgba(139, 92, 246, 0.7);
+    outline-offset: 1px;
+}
+
+.search-filter-select option { color: #111; }
+
+html body .search-filter-clear {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.8rem;
+    color: #c4b5fd;
+    background: transparent;
+}
+
+html body .search-filter-clear:hover { color: #fff; }
+
+html body .search-card-rating {
+    color: #fde68a;
+    background: rgba(250, 204, 21, 0.14);
+}
+
+/* 搜索卡片底部：来源徽章过长时截断，按钮文字不换行 */
+html body .card-hover .border-t {
+    gap: 0.4rem;
+}
+
+html body .card-hover .border-t > div:first-child {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+}
+
+html body .card-hover .border-t > div:first-child span {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+html body .card-hover .quick-card-details {
+    flex: none;
+    padding: 6px 8px;
+    font-size: 0.85rem;
+    white-space: nowrap;
 }
 
 html body .card-hover {

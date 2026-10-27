@@ -1,4 +1,4 @@
-const APP_VERSION = '202610271900';
+const APP_VERSION = '202610272000';
 const APP_SHELL_CACHE = `libretv-shell-${APP_VERSION}`;
 const OFFLINE_URL = '/offline.html';
 
@@ -29,9 +29,11 @@ const APP_SHELL_ASSETS = [
   '/js/customer_site.js',
   '/js/ui.js',
   '/js/api.js',
+  '/js/douban-filter.js',
   '/js/douban.js',
   '/js/password.js',
   '/js/search.js',
+  '/js/search-filter.js',
   '/js/config-manager.js',
   '/js/source-health.js',
   '/js/onboarding.js',

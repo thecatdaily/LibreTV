@@ -12,6 +12,9 @@ let currentSearchResults = [];
 let currentSearchGroups = [];
 let activeSearchRequest = 0;
 let activeSearchController = null;
+let searchFilter = window.SearchFilter ? window.SearchFilter.defaultFilter() : null; // 搜索结果的类型/年份/地区筛选与排序
+let lastSearchRender = { query: '', completed: 0, total: 0 };
+let searchFilterBarSignature = '';
 let activeMovieSourceSession = null;
 let movieDetailRequestId = 0;
 // 全局变量用于倒序状态
@@ -708,6 +711,12 @@ function resetSearchArea() {
     // 清理搜索结果
     document.getElementById('results').innerHTML = '';
     document.getElementById('searchInput').value = '';
+    const filterBar = document.getElementById('searchFilterBar');
+    if (filterBar) {
+        filterBar.hidden = true;
+        filterBar.innerHTML = '';
+    }
+    searchFilterBarSignature = '';
 
     // 恢复搜索区域的样式
     document.getElementById('searchArea').classList.add('flex-1');
@@ -789,6 +798,8 @@ async function search() {
 
     const request = ++activeSearchRequest;
     activeSearchController?.abort();
+    if (window.SearchFilter) searchFilter = window.SearchFilter.defaultFilter();
+    searchFilterBarSignature = '';
     const controller = new AbortController();
     activeSearchController = controller;
     showLoading();
@@ -811,6 +822,7 @@ async function search() {
     const update = () => {
         if (request !== activeSearchRequest) return;
         allResults = filterYellowContentResults(allResults);
+        // 先按片名、来源排好，保证分组和组内来源顺序稳定；展示顺序由 SearchFilter 的排序决定
         allResults.sort((a,b) => (a.vod_name || '').localeCompare(b.vod_name || '') || (a.source_name || '').localeCompare(b.source_name || ''));
         currentSearchResults = allResults;
         currentSearchGroups = LibreExperience.groupResults(allResults);
@@ -841,19 +853,100 @@ function cancelActiveSearch() {
 }
 window.cancelActiveSearch = cancelActiveSearch;
 
+// 搜索结果上方的筛选排序栏：选项从当前结果里统计，选项不变时不重建（避免结果陆续到达时打断正在操作的下拉框）
+function renderSearchFilterBar(groups) {
+    const bar = document.getElementById('searchFilterBar');
+    if (!bar || !window.SearchFilter || !searchFilter) return;
+    if (!groups.length) {
+        bar.hidden = true;
+        bar.innerHTML = '';
+        searchFilterBarSignature = '';
+        return;
+    }
+    const options = window.SearchFilter.options(groups);
+    const signature = JSON.stringify([options, searchFilter]);
+    bar.hidden = false;
+    if (signature === searchFilterBarSignature) return;
+    searchFilterBarSignature = signature;
+
+    const chip = (value, label, count) => `<button type="button" class="search-filter-chip ${searchFilter.kind === value ? 'is-active' : ''}"
+            data-filter-kind="${escapeHtmlAttr(value)}" aria-pressed="${searchFilter.kind === value}">${escapeHtmlAttr(label)}${count ? `<small>${count}</small>` : ''}</button>`;
+    const select = (key, label, allLabel, list) => {
+        const values = list.map(option => option.value);
+        // 已选值暂时不在结果里时仍保留在下拉框中
+        if (searchFilter[key] && !values.includes(searchFilter[key])) list = [{ value: searchFilter[key], count: 0 }, ...list];
+        return `<label class="search-filter-select"><span class="sr-only">${label}</span>
+            <select data-filter-key="${key}" aria-label="${label}">
+                <option value="">${allLabel}</option>
+                ${list.map(option => `<option value="${escapeHtmlAttr(option.value)}" ${searchFilter[key] === option.value ? 'selected' : ''}>${escapeHtmlAttr(option.value)}${option.count ? `（${option.count}）` : ''}</option>`).join('')}
+            </select></label>`;
+    };
+    const sorts = window.SearchFilter.SORTS.filter(sort =>
+        (sort.value !== 'rating' || options.hasRatings || searchFilter.sort === 'rating') &&
+        (sort.value !== 'updated' || options.hasUpdates || searchFilter.sort === 'updated'));
+
+    bar.innerHTML = `
+        <div class="search-filter-kinds" role="group" aria-label="类型">
+            ${chip('', '全部', groups.length)}
+            ${options.kinds.map(kind => chip(kind.value, kind.value, kind.count)).join('')}
+        </div>
+        <div class="search-filter-selects">
+            ${select('year', '年份', '全部年份', options.years)}
+            ${select('region', '地区', '全部地区', options.regions)}
+            <label class="search-filter-select"><span class="sr-only">排序</span>
+                <select data-filter-key="sort" aria-label="排序">
+                    ${sorts.map(sort => `<option value="${sort.value}" ${searchFilter.sort === sort.value ? 'selected' : ''}>${sort.label}</option>`).join('')}
+                </select></label>
+            ${window.SearchFilter.isFiltered(searchFilter) ? '<button type="button" class="search-filter-clear" data-filter-clear>清除筛选</button>' : ''}
+        </div>`;
+}
+
+function updateSearchFilter(changes) {
+    if (!searchFilter) return;
+    searchFilter = { ...searchFilter, ...changes };
+    renderSearchResults(lastSearchRender.query, currentSearchGroups, lastSearchRender.completed, lastSearchRender.total);
+}
+
+function setupSearchFilterBar() {
+    const bar = document.getElementById('searchFilterBar');
+    if (!bar || bar.dataset.ready) return;
+    bar.dataset.ready = 'true';
+    bar.addEventListener('click', event => {
+        const kindButton = event.target.closest('[data-filter-kind]');
+        if (kindButton) return updateSearchFilter({ kind: kindButton.dataset.filterKind });
+        if (event.target.closest('[data-filter-clear]')) updateSearchFilter({ kind: '', year: '', region: '' });
+    });
+    bar.addEventListener('change', event => {
+        const key = event.target.dataset?.filterKey;
+        if (key) updateSearchFilter({ [key]: event.target.value });
+    });
+}
+document.addEventListener('DOMContentLoaded', setupSearchFilterBar);
+
 function renderSearchResults(query, groups, completed, total) {
+    lastSearchRender = { query, completed, total };
     const resultsDiv = document.getElementById('results');
+    renderSearchFilterBar(groups);
+    const entries = window.SearchFilter && searchFilter
+        ? window.SearchFilter.apply(groups, query, searchFilter)
+        : groups.map((group, index) => ({ group, index, rating: 0 }));
+    const filtered = Boolean(window.SearchFilter?.isFiltered(searchFilter || {}));
     const count = document.getElementById('searchResultsCount');
-    if (count) count.textContent = String(groups.length);
+    if (count) count.textContent = filtered ? `${entries.length} / ${groups.length}` : String(groups.length);
     const status = document.getElementById('searchProgress');
     if (status) status.textContent = completed < total ? `已搜索 ${completed}/${total} 个来源，结果持续更新` : `已完成 ${total} 个来源`;
     if (!groups.length) {
         resultsDiv.innerHTML = `<div class="col-span-full text-center py-16 text-gray-400">${completed < total ? '正在查找影片…' : '没有找到匹配的结果，请尝试其他关键词或数据源'}</div>`;
         return;
     }
+    if (!entries.length) {
+        resultsDiv.innerHTML = `<div class="col-span-full text-center py-16 text-gray-400">没有符合筛选条件的结果
+            <button type="button" class="search-filter-clear ml-2" onclick="updateSearchFilter({ kind: '', year: '', region: '' })">清除筛选</button></div>`;
+        return;
+    }
     try {
         // 添加XSS保护，使用textContent和属性转义
-        const safeResults = groups.map((group, resultIndex) => {
+        const safeResults = entries.map(({ group, index: resultIndex, rating }) => {
             const item = group[0];
             const safeId = item.vod_id ? item.vod_id.toString().replace(/[^\w-]/g, '') : '';
             const safeName = (item.vod_name || '').toString()
@@ -903,6 +996,7 @@ function renderSearchResults(query, groups, completed, total) {
                     `<span class="text-xs py-0.5 px-1.5 rounded bg-opacity-20 bg-purple-500 text-purple-300">
                                           ${escapeHtmlAttr(item.vod_year)}
                                       </span>` : ''}
+                                    ${rating > 0 ? `<span class="search-card-rating text-xs py-0.5 px-1.5 rounded">★ ${rating.toFixed(1)}</span>` : ''}
                                 </div>
                                 <p class="text-gray-400 line-clamp-2 overflow-hidden ${hasCover ? '' : 'text-center'} mb-2">
                                     ${escapeHtmlAttr(item.vod_remarks || '暂无介绍')}
@@ -911,7 +1005,7 @@ function renderSearchResults(query, groups, completed, total) {
                             
                             <div class="flex justify-between items-center mt-1 pt-1 border-t border-gray-800">
                                 ${sourceInfo ? `<div>${sourceInfo}</div>` : '<div></div>'}
-                                <button type="button" class="quick-card-details" onclick="event.stopPropagation(); quickPlaySearchResult(${resultIndex}, true)">${group.length > 1 ? '查看来源' : '详情'}</button>
+                                <button type="button" class="quick-card-details" onclick="event.stopPropagation(); quickPlaySearchResult(${resultIndex}, true)">${group.length > 1 ? '来源' : '详情'}</button>
                                 <button type="button" class="quick-card-details" onclick="event.stopPropagation(); saveSearchResultForLater(${resultIndex})">稍后看</button>
                                 <!-- 接口名称过长会被挤变形
                                 <div>
