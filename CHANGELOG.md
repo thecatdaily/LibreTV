@@ -2,6 +2,14 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.35 - 2026-10-28
+
+### Changed
+
+- The home page opens straight onto content. The large logo, tagline and "FREE" badge are replaced by a slim sticky top bar: brand on the left (click to return home), the search box in the middle, and History and Settings on the right. The bar stays visible while scrolling, so you can search from anywhere on the page.
+- Recent searches appear in a dropdown under the search box when it is focused, and close when you type, search, press Esc or click elsewhere. On phones the dropdown spans the full width.
+- On phones, 继续观看 is a horizontal swipe row instead of a stack of full-width cards, so recommendations start near the top of the screen.
+
 ## 1.2.34 - 2026-10-27
 
 ### Added

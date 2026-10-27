@@ -140,3 +140,18 @@ test('search results filter and sort without losing their original index', async
   assert.ok(html.indexOf('js/search-filter.js') < html.indexOf('js/app.js'));
   assert.match(html, /id="searchFilterBar"/);
 });
+
+test('home page uses a compact sticky top bar with a recent-search dropdown', async () => {
+  const html = await read('index.html');
+  const topbar = html.slice(html.indexOf('<header class="lt-topbar">'), html.indexOf('</header>'));
+  assert.match(topbar, /id="searchInput"/);
+  assert.match(topbar, /id="recentSearches"/);
+  assert.match(topbar, /onclick="toggleHistory\(event\)"/);
+  assert.match(topbar, /onclick="toggleSettings\(event\)"/);
+  assert.doesNotMatch(html, /lt-hero|lt-badge|lt-fab/);
+  const css = await read('css/theme.css');
+  assert.match(css, /\.lt-topbar \{\s*position: sticky;/);
+  assert.match(css, /\.lt-search-wrap\.is-recent-open \.lt-recent:not\(:empty\)/);
+  const ui = await read('js/ui.js');
+  assert.match(ui, /function setupRecentSearchesDropdown\(\)/);
+});

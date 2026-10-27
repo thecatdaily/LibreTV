@@ -719,8 +719,6 @@ function resetSearchArea() {
     searchFilterBarSignature = '';
 
     // 恢复搜索区域的样式
-    document.getElementById('searchArea').classList.add('flex-1');
-    document.getElementById('searchArea').classList.remove('mb-8');
     document.getElementById('resultsArea').classList.add('hidden');
     window.renderContinueWatching?.();
     window.renderWatchLater?.();
@@ -808,8 +806,6 @@ async function search() {
     let completed = 0;
     let loadingVisible = true;
     const resultsArea = document.getElementById('resultsArea');
-    document.getElementById('searchArea').classList.remove('flex-1');
-    document.getElementById('searchArea').classList.add('mb-8');
     resultsArea.classList.remove('hidden');
     document.getElementById('doubanArea')?.classList.add('hidden');
     document.getElementById('continueWatching')?.classList.add('hidden');
