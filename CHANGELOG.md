@@ -2,6 +2,12 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.45 - 2026-10-28
+
+### Added
+
+- 画质增强 → 低画质修复, for TC copies and low-bitrate sources. Before upscaling it smooths compression blocks and noise with an edge-preserving filter at source resolution (small brightness steps are smoothed, real edges stay), and stretches a washed-out picture with automatic levels: about once a second a 64×36 thumbnail gives the 1st and 99th luma percentile, ignoring letterbox black, bounded (black point at most 0.2, white point at least 0.75, a range of at least 0.5) and blended in gradually so it never flickers; saturation is lifted by 10%. Then FSR upscaling with gentle sharpening. On a degraded test clip it widened the brightness range from 91–194 to 66–228, restored colour, and kept fine noise near the original level even after the contrast stretch, where 标准 doubled it; on a well-exposed clip it changed little (range 37–218 → 29–226, detail unchanged).
+
 ## 1.2.44 - 2026-10-28
 
 ### Added
