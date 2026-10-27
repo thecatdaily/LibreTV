@@ -282,6 +282,11 @@
                         <div id="douban-filter-panel" class="douban-filter-panel" hidden></div>
                     </div>
 
+                    <div id="douban-hidden-note" class="douban-hidden-note" hidden>
+                        已隐藏 <strong data-hidden-count>0</strong> 部暂无播放源的影片
+                        <button type="button" onclick="toggleDoubanUnavailable()" aria-pressed="false">显示</button>
+                    </div>
+
                     <!-- 推荐内容 -->
                     <div id="douban-results" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3"></div>
                     <div class="douban-more-wrap">
@@ -443,6 +448,7 @@
     <script src="js/search.js"></script>
     <script src="js/search-filter.js"></script>
     <script src="js/quick-play.js"></script>
+    <script src="js/source-availability.js"></script>
     <script src="js/experience.js"></script>
     <script src="js/episode-context.js"></script>
     <script src="js/modal-accessibility.js"></script>

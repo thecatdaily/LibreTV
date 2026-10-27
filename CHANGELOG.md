@@ -2,6 +2,26 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.36 - 2026-10-28
+
+### Added
+
+- Douban recommendations hide titles that no selected source can play. Each card is checked in the background, source by source: the title must match, the release year may differ by at most one, the kind must fit (a film is not a same-name short drama), and the source must list a direct video URL. Results are cached (found: 3 days, missing: 6 hours). A note shows how many were hidden, with a button to show them dimmed, and the filter view loads another page when too few remain. The same check removes unplayable Douban items from the player page's 同类型推荐.
+- Player page synopsis shows the Douban rating with a link to the Douban page, using the Douban ID and score that sources already provide.
+- Player page header matches the home page and has a search box (an icon that expands on narrow screens) that opens search results without going back first.
+
+### Changed
+
+- Broken covers fall back to the same title's cover from another source, then to the Douban poster (looked up once by Douban ID and cached), instead of a grey placeholder. This matters for sources whose image host no longer resolves.
+- Recommendation cards and Douban cards only show a rating that comes from Douban. Sources' own scores (often 1.0 or 10.0 placeholders) and "暂无" badges are gone.
+- Long cast lists are clamped to two lines with an expand button.
+- On phones, 同系列作品 and 同类型推荐 scroll horizontally, which roughly halves the page length.
+- The 选集 button in the info bar is hidden on wide screens, where the episode column is already beside the player.
+
+### Fixed
+
+- Player errors no longer show the loading spinner on top of the error text, and on phones the error message and buttons fit inside the small player.
+
 ## 1.2.35 - 2026-10-28
 
 ### Changed

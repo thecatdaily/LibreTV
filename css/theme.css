@@ -768,6 +768,47 @@ html body .douban-filter-options button.is-active {
     margin-top: 1.25rem;
 }
 
+/* 暂无播放源的豆瓣条目：默认隐藏，点“显示”后以半透明呈现 */
+.douban-hidden-note {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: -0.25rem 0 0.75rem;
+    font-size: 0.8rem;
+    color: var(--lt-faint);
+}
+
+.douban-hidden-note[hidden] { display: none; }
+.douban-hidden-note strong { color: var(--lt-muted); font-weight: 600; }
+
+html body .douban-hidden-note button {
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    color: #c4b5fd;
+    background: transparent;
+    border: 1px solid rgba(139, 92, 246, 0.4);
+}
+
+html body .douban-hidden-note button:hover { color: #fff; background: rgba(139, 92, 246, 0.2); }
+
+html body #douban-results > div.douban-unavailable { display: none; }
+html body #douban-results.show-unavailable > div.douban-unavailable { display: flex; opacity: 0.45; }
+
+.douban-unavailable-badge { display: none; }
+#douban-results.show-unavailable .douban-unavailable .douban-unavailable-badge {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 1;
+    display: block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    color: #fecaca;
+    background: rgba(127, 29, 29, 0.75);
+}
+
 /* 豆瓣卡片 */
 #douban-results {
     gap: 1rem;
@@ -1382,6 +1423,123 @@ html body.lt-player-page .player-header-fixed {
     border-bottom: 1px solid var(--lt-line);
     -webkit-backdrop-filter: var(--lt-blur);
     backdrop-filter: var(--lt-blur);
+}
+
+/* 播放页顶栏：与首页同款品牌标识 + 标题 + 搜索 + 返回 */
+html body.lt-player-page .lt-player-topbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    height: 4rem;
+    padding: 0 1rem;
+}
+
+html body.lt-player-page .lt-player-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex: none;
+    cursor: pointer;
+}
+
+html body.lt-player-page .lt-player-brand h1 {
+    font-size: 1.3rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+html body.lt-player-page .lt-player-brand:hover .lt-brand-mark { transform: rotate(-8deg) scale(1.06); }
+
+html body.lt-player-page .lt-player-title {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.lt-player-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: none;
+    width: min(20rem, 26vw);
+    height: 2.5rem;
+    border-radius: 999px;
+    background: var(--lt-surface-2);
+    border: 1px solid var(--lt-line);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.lt-player-search:focus-within {
+    border-color: rgba(139, 92, 246, 0.6);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
+}
+
+.lt-player-search svg {
+    position: absolute;
+    left: 0.8rem;
+    width: 1rem;
+    height: 1rem;
+    color: var(--lt-faint);
+    pointer-events: none;
+}
+
+html body .lt-player-search input {
+    width: 100%;
+    height: 100%;
+    padding: 0 0.9rem 0 2.2rem;
+    border: 0;
+    background: transparent;
+    color: var(--lt-text);
+    font-size: 0.9rem;
+    outline: none;
+}
+
+.lt-player-search input::placeholder { color: var(--lt-faint); }
+.lt-player-search input::-webkit-search-cancel-button { filter: invert(0.7); }
+
+.lt-player-search-toggle,
+html body.lt-player-page .lt-player-back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    flex: none;
+    height: 2.5rem;
+    border-radius: 999px;
+    color: var(--lt-muted);
+    background: var(--lt-surface);
+    border: 1px solid var(--lt-line);
+    transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+
+html body.lt-player-page .lt-player-back { padding: 0 0.95rem; font-size: 0.875rem; }
+.lt-player-search-toggle { display: none; width: 2.5rem; }
+
+.lt-player-search-toggle:hover,
+html body.lt-player-page .lt-player-back:hover {
+    color: var(--lt-text);
+    border-color: rgba(139, 92, 246, 0.5);
+    background: rgba(28, 24, 52, 0.75);
+}
+
+.lt-player-search-toggle svg,
+.lt-player-back svg { width: 1.1rem; height: 1.1rem; }
+
+@media (max-width: 1023px) {
+    .lt-player-search { display: none; }
+    .lt-player-search-toggle { display: inline-flex; }
+    .lt-player-topbar.is-searching .lt-player-title,
+    .lt-player-topbar.is-searching .lt-player-search-toggle { display: none; }
+    .lt-player-topbar.is-searching .lt-player-search { display: flex; flex: 1; width: auto; }
+}
+
+@media (max-width: 640px) {
+    html body.lt-player-page .lt-player-topbar { height: 3.5rem; gap: 0.5rem; padding: 0 0.75rem; }
+    html body.lt-player-page .lt-player-title { font-size: 1rem; }
+    html body.lt-player-page .lt-player-back { width: 2.375rem; height: 2.375rem; padding: 0; }
+    .lt-player-search-toggle { width: 2.375rem; height: 2.375rem; }
 }
 
 html body.lt-player-page #player {

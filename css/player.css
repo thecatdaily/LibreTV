@@ -332,12 +332,19 @@ div.player-loading-text {
     display: none;
     align-items: center;
     justify-content: center;
-    background-color: rgba(0, 0, 0, 0.7);
+    background-color: rgba(6, 6, 14, 0.88);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
     color: white;
     z-index: 100;
     flex-direction: column;
     text-align: center;
     padding: 1rem;
+}
+
+/* 显示错误时不再让播放器自带的加载圈叠在错误文字上 */
+#playerContainer:has(#error[style*="display: flex"]) .art-loading {
+    display: none !important;
 }
 
 .error-icon {
@@ -374,6 +381,23 @@ div.player-loading-text {
 .error-action-secondary {
     background: rgba(31, 41, 55, 0.9);
     border-color: #4b5563 !important;
+}
+
+/* 手机竖屏播放器只有约 200px 高：错误提示改为紧凑排版，按钮不压到控制栏 */
+@media (max-width: 640px) {
+    .error-container { padding: 0.5rem 0.75rem; }
+    .error-icon { font-size: 26px; margin-bottom: 4px; }
+    #error-message { font-size: 0.95rem; font-weight: 600; }
+    .error-message-sub {
+        margin-top: 4px;
+        font-size: 12px;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        overflow: hidden;
+    }
+    .error-actions { gap: 0.5rem; margin-top: 0.6rem; }
+    .error-actions button { padding: 0.35rem 0.75rem; font-size: 0.8rem; }
 }
 
 .episode-active {
@@ -641,6 +665,12 @@ input:checked + .slider:before {
 .player-synopsis-copy p { margin:5px 0; color:#d7deea; line-height:1.65; white-space:pre-wrap; overflow-wrap:anywhere; }
 .player-synopsis-copy .player-synopsis-description { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:5; overflow:hidden; }
 .player-synopsis-copy .player-synopsis-description.expanded { display:block; }
+.player-synopsis-copy .player-synopsis-cast { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+.player-synopsis-copy .player-synopsis-cast.expanded { display:block; }
+.player-synopsis-cast-toggle { padding:2px 0 6px; color:#8ccfff; font-size:.85rem; }
+.player-synopsis-cast-toggle:hover { text-decoration:underline; }
+.player-synopsis-meta .player-synopsis-douban { padding:3px 9px; border-radius:5px; background:rgba(0,180,51,.16); border:1px solid rgba(0,180,51,.45); color:#6ee7a0; font-size:.8rem; font-weight:600; text-decoration:none; }
+.player-synopsis-meta .player-synopsis-douban:hover { background:rgba(0,180,51,.28); color:#bbf7d0; }
 .player-synopsis-expand { margin-top:8px; padding:8px 0; color:#8ccfff; text-decoration:underline; min-height:44px; }
 .player-recommendation-section[hidden] { display:none; }
 .player-recommendation-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:14px; color:#aebbd0; }
@@ -942,6 +972,28 @@ input:checked + .slider:before {
 /* 网页全屏按钮只在桌面端显示 */
 .art-video-player.player-touch-device .art-control-fullscreenWeb {
     display: none !important;
+}
+
+/* 宽屏时右侧已有常驻选集栏，信息栏里的“选集”按钮重复，隐藏 */
+@media (min-width: 1280px) {
+    .player-stage.has-side-episodes ~ #resourceInfoBarContainer #quickEpisodesButton { display: none; }
+}
+
+/* 手机上推荐改为横向滑动，避免两列大卡片把页面拉得很长 */
+@media (max-width: 640px) {
+    .player-recommendation-grid {
+        display: flex;
+        overflow-x: auto;
+        gap: 10px;
+        margin: 0 -1rem;
+        padding: 0 1rem 4px;
+        scroll-snap-type: x mandatory;
+        scroll-padding: 0 1rem;
+        scrollbar-width: none;
+    }
+    .player-recommendation-grid::-webkit-scrollbar { display: none; }
+    .player-recommendation-grid > .player-recommendation-card { flex: 0 0 38%; scroll-snap-align: start; }
+    .player-recommendation-grid .player-recommendation-poster { aspect-ratio: 2/3; }
 }
 
 /* 宽屏双栏：播放器 + 右侧常驻选集栏 */
