@@ -102,7 +102,7 @@ window.createMobileFullscreenControls = function createMobileFullscreenControls(
     }
 
     function onStart(event) {
-        if (!active || event.touches.length !== 1 || event.target.closest('button, input, .art-controls, .art-setting, .player-top-actions, .player-episode-drawer, .player-next-card, .player-shortcut-help')) return;
+        if (!active || event.touches.length !== 1 || event.target.closest('button, input, .art-controls, .art-setting, .player-top-actions, .player-episode-drawer, .player-next-card, .player-shortcut-help, .player-stats-panel')) return;
         const touch = event.touches[0];
         const bounds = player.getBoundingClientRect();
         gesture = {

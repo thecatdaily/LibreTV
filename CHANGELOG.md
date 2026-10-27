@@ -2,6 +2,16 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.42 - 2026-10-28
+
+### Added
+
+- Player 统计信息, modelled on YouTube's "Stats for nerds": title and episode, source and video CDN host, viewport and dropped frames, current and highest resolution, video and audio codecs, measured bitrate, volume and speed, connection speed, network activity and buffer health with one-minute graphs, segment count with average time to first byte and download time, data downloaded for this episode, ad segments removed, progress, and player versions. Open it from the right-click menu or, on any device including phones, from the player settings. It refreshes every second while open, stays open across episodes and closes with its ✕ button or Esc.
+
+### Fixed
+
+- ArtPlayer's own video info panel could not be closed: the player's tap-to-pause handler took the click on its [x] and paused the video instead. The menu entry now opens the new panel, and clicks inside either panel no longer reach play/pause, long-press speed-up or fullscreen gestures.
+
 ## 1.2.41 - 2026-10-28
 
 ### Changed
