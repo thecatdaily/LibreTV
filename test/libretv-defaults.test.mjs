@@ -1242,15 +1242,16 @@ test('release metadata is bumped for this update', async () => {
 
   const changelog = await readProjectFile('CHANGELOG.md');
 
-  assert.equal(packageJson.version, '1.2.39');
-  assert.equal(lockJson.version, '1.2.39');
-  assert.equal(lockJson.packages[''].version, '1.2.39');
-  assert.match(config, /version:\s*'1\.2\.39'/);
-  assert.match(serviceWorker, /const APP_VERSION = '202610280930'/);
+  assert.equal(packageJson.version, '1.2.40');
+  assert.equal(lockJson.version, '1.2.40');
+  assert.equal(lockJson.packages[''].version, '1.2.40');
+  assert.match(config, /version:\s*'1\.2\.40'/);
+  assert.match(serviceWorker, /const APP_VERSION = '202610281000'/);
   assert.match(serviceWorker, /'\/js\/player-recommendations\.js'/);
   assert.match(serviceWorker, /'\/js\/mobile-fullscreen\.js'/);
   assert.match(serviceWorker, /'\/css\/theme\.css'/);
   assert.match(serviceWorker, /'\/js\/source-speed\.js'/);
+  assert.match(changelog, /## 1\.2\.40 - 2026-10-28[\s\S]*?every version/);
   assert.match(changelog, /## 1\.2\.39 - 2026-10-28[\s\S]*?prebuilt/);
   assert.match(changelog, /## 1\.2\.38 - 2026-10-28[\s\S]*?shorter region labels/);
   assert.match(changelog, /## 1\.2\.37 - 2026-10-28[\s\S]*?Daily source check-up in the browser/);

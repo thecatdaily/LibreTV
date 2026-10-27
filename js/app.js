@@ -1008,7 +1008,7 @@ function renderSearchResults(query, groups, completed, total) {
                                     ${rating > 0 ? `<span class="search-card-rating text-xs py-0.5 px-1.5 rounded">★ ${rating.toFixed(1)}</span>` : ''}
                                 </div>
                                 <p class="text-gray-400 line-clamp-2 overflow-hidden ${hasCover ? '' : 'text-center'} mb-2">
-                                    ${escapeHtmlAttr(item.vod_remarks || '暂无介绍')}
+                                    ${escapeHtmlAttr(searchCardVersionText(group) || '暂无介绍')}
                                 </p>
                             </div>
                             
@@ -1700,6 +1700,13 @@ window.getResultTypeLabel = getResultTypeLabel;
 
 // 移除Node.js的require语句，因为这是在浏览器环境中运行的
 
+// A merged card lists every version its sources offer (HD · TC), best first.
+function searchCardVersionText(group) {
+    if (group.length === 1 || !window.LibreExperience?.versionLabels) return group[0]?.vod_remarks || '';
+    const labels = LibreExperience.versionLabels(group);
+    return labels.length > 3 ? `${labels.slice(0, 3).join(' · ')} 等` : labels.join(' · ');
+}
+
 function quickPlaySearchResult(index, details = false) {
     const group = currentSearchGroups[index];
     if (!group?.length) return;
@@ -1720,14 +1727,24 @@ function showGroupedSearchSources(index) {
     const heading = document.createElement('p');
     heading.textContent = `找到 ${group.length} 个来源，点击查看该来源详情或直接点影片卡片播放`;
     content.appendChild(heading);
-    // 按资源站体检和实际播放表现排序，靠谱的排前面
+    // 清晰的版本排前面；同一版本再按资源站体检和实际播放表现排序
     const order = window.SourceAutopilot ? window.SourceAutopilot.rank(group.map(item => item.source_code)) : [];
-    const ranked = [...group].sort((a, b) => order.indexOf(a.source_code) - order.indexOf(b.source_code));
+    const rank = item => Math.floor(window.LibreExperience?.versionRank?.(item) ?? 3);
+    const ranked = [...group].sort((a, b) => rank(b) - rank(a) || order.indexOf(a.source_code) - order.indexOf(b.source_code));
     ranked.forEach(item => {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'grouped-source-button';
-        button.textContent = item.source_name || item.source_code || '资源';
+        const name = document.createElement('span');
+        name.textContent = item.source_name || item.source_code || '资源';
+        button.appendChild(name);
+        const version = window.LibreExperience?.versionLabel?.(item) || '';
+        if (version) {
+            const tag = document.createElement('span');
+            tag.className = `grouped-source-version${rank(item) <= 1 ? ' is-low' : ''}`;
+            tag.textContent = version;
+            button.appendChild(tag);
+        }
         button.onclick = () => showDetails(item.vod_id, item.vod_name, item.source_code);
         content.appendChild(button);
     });

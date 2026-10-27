@@ -1658,6 +1658,11 @@ html body.lt-player-page .error-action-primary {
 .search-progress { display: block; font-size: .75rem; color: #b9c1d5; }
 .grouped-source-button { display:block; width:100%; padding: .75rem; margin:.4rem 0; color:white; background:#1b253a; border:1px solid #45516c; border-radius:9px; text-align:left; }
 .grouped-source-button:hover,.grouped-source-button:focus-visible { border-color:#806df0; }
+.grouped-source-button { display:flex; align-items:center; justify-content:space-between; gap:.75rem; }
+.grouped-source-version { flex:none; max-width:55%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:.1rem .5rem; border-radius:999px; font-size:.75rem; color:#c4b5fd; background:rgba(139,92,246,.16); border:1px solid rgba(139,92,246,.35); }
+.grouped-source-version.is-low { color:#fbbf24; background:rgba(251,191,36,.1); border-color:rgba(251,191,36,.3); }
+.resource-version-tag { padding:.05rem .45rem; border-radius:999px; font-size:.72rem; color:#c4b5fd; background:rgba(139,92,246,.16); }
+.resource-version-tag.is-low { color:#fbbf24; background:rgba(251,191,36,.1); }
 
 #watchLater { width:100%; max-width:80rem; margin:1.2rem auto 0; }
 .watch-later-card { flex-direction:row; align-items:center; justify-content:space-between; gap:.5rem; }
