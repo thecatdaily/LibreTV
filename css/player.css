@@ -214,7 +214,9 @@ div.player-loading-text {
 .mobile-fullscreen-header { display:flex; align-items:center; gap:8px; padding:max(14px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)); min-width:0; }
 .mobile-fullscreen-title { flex:1; min-width:0; font-size:15px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .mobile-fullscreen-chrome button { display:grid; place-items:center; flex:none; min-width:44px; min-height:44px; border:0; border-radius:50%; background:rgba(0,0,0,.56); color:#fff; cursor:pointer; pointer-events:auto; }
-.mobile-fullscreen-chrome .mobile-fullscreen-more { padding:0 12px; border-radius:22px; font-size:13px; }
+.mobile-fullscreen-chrome .mobile-fullscreen-more,
+.mobile-fullscreen-chrome .mobile-fullscreen-episodes { padding:0 12px; border-radius:22px; font-size:13px; }
+.mobile-fullscreen-chrome .mobile-fullscreen-episodes[hidden] { display:none; }
 .mobile-fullscreen-chrome .mobile-fullscreen-play { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:66px; height:66px; font-size:27px; line-height:1; }
 .mobile-fullscreen-footer { padding:0 max(20px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)); pointer-events:none; }
 .mobile-fullscreen-seek { display:block; width:100%; height:32px; margin:0; accent-color:#23ade5; cursor:pointer; pointer-events:auto; }
@@ -227,6 +229,7 @@ div.player-loading-text {
         display: none !important;
     }
 
+    #player.mobile-portrait-compact-controls .art-controls-left .art-control.art-control-playAndPause,
     #player.mobile-portrait-compact-controls .art-controls-right .art-control.art-control-setting,
     #player.mobile-portrait-compact-controls .art-controls-right .art-control.art-control-pip,
     #player.mobile-portrait-compact-controls .art-controls-right .art-control.art-control-fullscreen {
@@ -653,3 +656,244 @@ input:checked + .slider:before {
 .player-recommendation-card small { margin-bottom:10px; color:#b8c6d9; }
 .player-recommendation-retry { min-height:44px; padding:8px 12px; border:1px solid #5c6b86; border-radius:8px; color:white; background:#24344f; }
 @media(max-width:480px){.player-discovery{gap:22px;padding-top:18px}.player-synopsis-panel{padding:14px}.player-synopsis-cover{width:84px}.player-recommendation-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.player-recommendation-poster{aspect-ratio:2/2.4}}
+
+
+/* 控制栏中的文字按钮：选集、倍速 */
+.art-video-player .art-control-episodes,
+.art-video-player .art-control-playback-rate {
+    padding: 0 8px;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* 单集视频不需要选集和上一集/下一集 */
+.art-video-player.player-single-episode .art-control-episodes,
+.art-video-player.player-single-episode .art-control-prev-episode,
+.art-video-player.player-single-episode .art-control-next-episode {
+    display: none !important;
+}
+
+/* 快捷键提示：挂在播放器内，居中显示在画面上（全屏同样可见） */
+.art-video-player .shortcut-hint {
+    position: absolute;
+    z-index: 80;
+    pointer-events: none;
+    font-size: 1.15rem;
+    padding: 0.7rem 1.4rem;
+    border-radius: 999px;
+    background-color: rgba(0, 0, 0, 0.62);
+    backdrop-filter: blur(6px);
+}
+
+/* 播放器内的选集面板 */
+.player-episode-drawer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 70;
+    display: flex;
+    flex-direction: column;
+    width: min(360px, 88%);
+    background: rgba(10, 10, 20, 0.9);
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(16px);
+    color: #eef0ff;
+    animation: player-drawer-in 0.22s ease-out;
+}
+
+.player-episode-drawer[hidden] {
+    display: none;
+}
+
+@keyframes player-drawer-in {
+    from { transform: translateX(24px); opacity: 0; }
+    to { transform: none; opacity: 1; }
+}
+
+.player-episode-drawer-head {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.9rem 1rem 0.7rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.player-episode-drawer-head span {
+    color: #a1a5c0;
+    font-size: 0.8rem;
+}
+
+.player-episode-drawer-close {
+    margin-left: auto;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    color: #a1a5c0;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.player-episode-drawer-list {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.45rem;
+    padding: 0.8rem 1rem 1rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.player-episode-drawer-list.is-titled {
+    grid-template-columns: 1fr;
+}
+
+.player-episode-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    min-height: 2.5rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.05);
+    color: inherit;
+    font-size: 0.9rem;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.player-episode-drawer-list.is-titled .player-episode-item {
+    justify-content: flex-start;
+    text-align: left;
+}
+
+.player-episode-item:hover {
+    border-color: rgba(139, 92, 246, 0.6);
+    background: rgba(139, 92, 246, 0.16);
+}
+
+.player-episode-item.is-current {
+    border-color: transparent;
+    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 45%, #22d3ee 100%);
+    color: #fff;
+}
+
+.player-episode-number {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.player-episode-drawer-list.is-titled .player-episode-number {
+    min-width: 1.8rem;
+    color: #a1a5c0;
+}
+
+.player-episode-drawer-list.is-titled .is-current .player-episode-number {
+    color: #fff;
+}
+
+.player-episode-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 片尾“下一集”倒计时卡片 */
+.player-next-card {
+    position: absolute;
+    right: 1rem;
+    bottom: 4.5rem;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    max-width: min(320px, calc(100% - 2rem));
+    padding: 0.8rem 0.9rem;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(10, 10, 20, 0.82);
+    backdrop-filter: blur(14px);
+    color: #eef0ff;
+    box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.9);
+}
+
+.player-next-card[hidden] {
+    display: none;
+}
+
+.player-next-card-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.player-next-card-count {
+    color: #a1a5c0;
+    font-size: 0.75rem;
+}
+
+.player-next-card-text strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.95rem;
+}
+
+.player-next-card-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.player-next-card-actions button {
+    flex: 1;
+    padding: 0.4rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.player-next-card-actions button[data-next-action="play"] {
+    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 45%, #22d3ee 100%);
+}
+
+@media (max-width: 640px) {
+    .player-next-card {
+        right: 0.6rem;
+        bottom: 3.6rem;
+        padding: 0.6rem 0.7rem;
+    }
+
+    .player-episode-drawer {
+        width: 100%;
+    }
+}
+
+/* 页面下方集数按钮：带名称的集数左对齐并截断 */
+.episode-btn.episode-btn-titled {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 0;
+    text-align: left;
+}
+
+.episode-btn-number {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.75;
+}
+
+.episode-btn-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#episodesList.episode-list-titled {
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)) !important;
+}

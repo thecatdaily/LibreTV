@@ -2,6 +2,21 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.29 - 2026-10-27
+
+### Added
+
+- An in-player episode list (选集) opens from the control bar and from mobile fullscreen, so episodes can be picked without leaving fullscreen. Variety-show episodes named by date or title show their names; plain numbered names show just the number.
+- A visible speed (倍速) button sits in the control bar, and the chosen speed is remembered across episodes, reloads and titles. The temporary long-press 3x speed is not remembered.
+- During the last seconds of an episode a card shows the next episode with a countdown, Play now and Cancel. Cancel stops the automatic next episode for that episode.
+
+### Fixed
+
+- Switching episodes quickly no longer mutes playback or shows the "已静音自动播放" notice. Only a real autoplay-policy block mutes.
+- On touch screens a single tap shows or hides the controls and a double tap plays or pauses, instead of a single tap pausing.
+- Shortcut hints appear centered over the video, including in fullscreen, and show the actual play state.
+- The left arrow key in the first five seconds returns to the start.
+
 ## 1.2.28 - 2026-10-12
 
 ### Added

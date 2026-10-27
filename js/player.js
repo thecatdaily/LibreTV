@@ -105,6 +105,10 @@ let mobileFullscreenInteraction = null;
 let playerTopActionsEl = null; // 播放器顶部浮动按钮容器
 let playerControlDensityCleanup = null; // 播放器控制栏密度事件清理器
 let castAvailabilityCleanup = null; // 投屏可用性监听清理器
+let episodeDrawer = null; // 播放器内选集面板（全屏可用）
+let nextEpisodeCard = null; // 片尾“下一集”倒计时卡片
+let temporaryRateActive = false; // 长按倍速期间不记忆倍速
+let preferredRateApplied = false; // 每次加载只恢复一次记忆的倍速
 const modalHome = { parent: null, nextSibling: null };
 const isWebkit = (typeof window.webkitConvertPointFromNodeToPage === 'function')
 const PLAYER_SURFACE_INTERACTIVE_SELECTOR = [
@@ -319,7 +323,9 @@ function tryStartPlayback() {
         return Promise.resolve(true);
     }
 
-    return playbackPromise.catch(() => {
+    return playbackPromise.catch(error => {
+        // 快速切集会让上一次 play() 以 AbortError 结束，这不是自动播放限制，不能静音
+        if (!window.PlayerEnhancements?.shouldMuteAfterPlayRejection(error)) return false;
         art.muted = true;
         art.video.muted = true;
         showAutoplayMutedNotice();
@@ -459,7 +465,7 @@ function shouldIgnorePlayerSurfaceToggle(event) {
 function togglePlaybackFromSurface() {
     if (!art || !art.video) return;
     art.toggle();
-    showShortcutHint('播放/暂停', 'play');
+    showShortcutHint(art.video.paused ? '已暂停' : '继续播放', 'play');
 }
 
 function setupPlayerSurfaceToggle() {
@@ -472,10 +478,26 @@ function setupPlayerSurfaceToggle() {
     }
 
     let clickTimer = null;
+    let lastPointerType = '';
+    let controlsHideTimer = null;
     const clearClickTimer = () => {
         if (clickTimer) {
             clearTimeout(clickTimer);
             clickTimer = null;
+        }
+    };
+    const isTouchTap = event => (event.pointerType || lastPointerType) === 'touch' ||
+        (!event.pointerType && !lastPointerType && isMobilePlaybackDevice());
+    const rememberPointerType = event => { lastPointerType = event.pointerType || ''; };
+
+    // 触屏：单击显示/隐藏控制栏，双击播放/暂停（与主流视频网站一致）
+    const toggleControlsFromTap = () => {
+        if (!art?.controls) return;
+        const show = !art.controls.show;
+        art.controls.show = show;
+        clearTimeout(controlsHideTimer);
+        if (show && !art.video.paused) {
+            controlsHideTimer = setTimeout(() => { if (art && !art.video.paused) art.controls.show = false; }, 3500);
         }
     };
 
@@ -494,6 +516,19 @@ function setupPlayerSurfaceToggle() {
             if (!mobileFullscreenInteraction.shouldSuppressClick()) mobileFullscreenInteraction.toggleChrome();
             return;
         }
+        if (isTouchTap(event)) {
+            consumeSurfaceEvent(event);
+            if (clickTimer) {
+                clearClickTimer();
+                togglePlaybackFromSurface();
+                return;
+            }
+            clickTimer = setTimeout(() => {
+                clickTimer = null;
+                toggleControlsFromTap();
+            }, 260);
+            return;
+        }
         if (event.detail > 1) return;
 
         consumeSurfaceEvent(event);
@@ -506,7 +541,8 @@ function setupPlayerSurfaceToggle() {
 
     const handleSurfaceDoubleClick = (event) => {
         if (shouldIgnorePlayerSurfaceToggle(event)) return;
-        if (mobileFullscreenInteraction?.active) {
+        if (mobileFullscreenInteraction?.active || isTouchTap(event)) {
+            // 触屏双击已在单击处理中识别为播放/暂停
             consumeSurfaceEvent(event);
             return;
         }
@@ -516,11 +552,14 @@ function setupPlayerSurfaceToggle() {
         toggleFullscreenMode();
     };
 
+    playerEl.addEventListener('pointerdown', rememberPointerType, true);
     playerEl.addEventListener('click', handleSurfaceClick, true);
     playerEl.addEventListener('dblclick', handleSurfaceDoubleClick, true);
 
     playerSurfaceCleanup = () => {
         clearClickTimer();
+        clearTimeout(controlsHideTimer);
+        playerEl.removeEventListener('pointerdown', rememberPointerType, true);
         playerEl.removeEventListener('click', handleSurfaceClick, true);
         playerEl.removeEventListener('dblclick', handleSurfaceDoubleClick, true);
     };
@@ -890,6 +929,90 @@ function updateHlsQualityControl() {
     });
 }
 
+function buildRateOptions(activeRate = art?.playbackRate || window.PlayerEnhancements.readStoredRate()) {
+    return window.PlayerEnhancements.PLAYBACK_RATES.map(rate => ({
+        html: rate === 1 ? '正常' : `${rate}x`,
+        rate,
+        default: Number(activeRate) === rate
+    }));
+}
+
+function updateRateControl() {
+    if (!art || !art.controls || typeof art.controls.update !== 'function') return;
+    const rate = art.playbackRate || 1;
+    art.controls.update({
+        name: 'playback-rate',
+        index: 10,
+        position: 'right',
+        html: window.PlayerEnhancements.rateLabel(rate),
+        tooltip: '播放速度',
+        selector: buildRateOptions(rate),
+        onSelect(item) {
+            art.playbackRate = item.rate;
+            window.PlayerEnhancements.storeRate(item.rate);
+            showShortcutHint(`${item.rate === 1 ? '正常' : item.rate + ' 倍'}速度`, 'right');
+            return window.PlayerEnhancements.rateLabel(item.rate);
+        }
+    });
+}
+
+// 每次加载视频只恢复一次全局记忆的倍速
+function applyPreferredPlaybackRate() {
+    if (!art || preferredRateApplied) return;
+    preferredRateApplied = true;
+    const rate = window.PlayerEnhancements.readStoredRate();
+    if (art.playbackRate !== rate) art.playbackRate = rate;
+}
+
+function updateEpisodeControlVisibility() {
+    const playerEl = art?.template?.$player;
+    if (!playerEl) return;
+    playerEl.classList.toggle('player-single-episode', !(currentEpisodes.length > 1));
+}
+
+function getNextEpisodeInfo() {
+    const nextIndex = currentEpisodeIndex + 1;
+    if (nextIndex >= currentEpisodes.length) return null;
+    return window.PlayerEnhancements.episodeLabel(nextIndex, currentEpisodeNames[nextIndex]);
+}
+
+// 选集面板和下一集卡片挂在播放器内部，全屏时同样可用
+function setupPlayerOverlays() {
+    episodeDrawer?.destroy();
+    nextEpisodeCard?.destroy();
+    episodeDrawer = null;
+    nextEpisodeCard = null;
+    const host = art?.template?.$player;
+    if (!host || !window.PlayerEnhancements) return;
+
+    episodeDrawer = window.PlayerEnhancements.createEpisodeDrawer({
+        host,
+        getEpisodes: () => currentEpisodes,
+        getNames: () => currentEpisodeNames,
+        getIndex: () => currentEpisodeIndex,
+        isReversed: () => episodesReversed,
+        onSelect: index => { if (index !== currentEpisodeIndex) playEpisode(index); }
+    });
+    nextEpisodeCard = window.PlayerEnhancements.createNextEpisodeCard({
+        host,
+        video: art.video,
+        getNext: getNextEpisodeInfo,
+        isEnabled: () => autoplayEnabled,
+        onPlayNext: playNextEpisode
+    });
+
+    // 快捷键提示放进播放器，居中显示在画面上（全屏时也可见）
+    const hint = document.getElementById('shortcutHint');
+    if (hint && hint.parentElement !== host) host.appendChild(hint);
+    updateEpisodeControlVisibility();
+}
+
+function toggleEpisodeDrawer() {
+    if (!episodeDrawer) return;
+    episodeDrawer.toggle();
+    if (episodeDrawer.isOpen) art.controls.show = true;
+}
+
 function buildVideoControls() {
     return [
         {
@@ -907,6 +1030,27 @@ function buildVideoControls() {
             html: playerControlIcon('next'),
             tooltip: '下一集',
             click: playNextEpisode
+        },
+        {
+            name: 'episodes',
+            index: 9,
+            position: 'right',
+            html: '选集',
+            tooltip: '选集',
+            click: toggleEpisodeDrawer
+        },
+        {
+            name: 'playback-rate',
+            index: 10,
+            position: 'right',
+            html: window.PlayerEnhancements.rateLabel(window.PlayerEnhancements.readStoredRate()),
+            tooltip: '播放速度',
+            selector: buildRateOptions(window.PlayerEnhancements.readStoredRate()),
+            onSelect(item) {
+                art.playbackRate = item.rate;
+                window.PlayerEnhancements.storeRate(item.rate);
+                return window.PlayerEnhancements.rateLabel(item.rate);
+            }
         },
         {
             name: 'switch-resource',
@@ -1351,20 +1495,20 @@ function handleKeyboardShortcuts(e) {
         }
     }
 
-    // 左箭头 = 快退
+    // 左箭头 = 快退（开头 5 秒内退回到 0 秒）
     if (!e.altKey && e.key === 'ArrowLeft') {
-        if (art && art.currentTime > 5) {
-            art.currentTime -= 5;
-            showShortcutHint('快退', 'left');
+        if (art) {
+            art.currentTime = window.PlayerEnhancements.clampSeek(art.currentTime, -5, art.duration);
+            showShortcutHint('快退 5 秒', 'left');
             e.preventDefault();
         }
     }
 
     // 右箭头 = 快进
     if (!e.altKey && e.key === 'ArrowRight') {
-        if (art && art.currentTime < art.duration - 5) {
-            art.currentTime += 5;
-            showShortcutHint('快进', 'right');
+        if (art) {
+            art.currentTime = window.PlayerEnhancements.clampSeek(art.currentTime, 5, art.duration);
+            showShortcutHint('快进 5 秒', 'right');
             e.preventDefault();
         }
     }
@@ -1391,7 +1535,7 @@ function handleKeyboardShortcuts(e) {
     if (e.key === ' ') {
         if (art) {
             art.toggle();
-            showShortcutHint('播放/暂停', 'play');
+            showShortcutHint(art.video.paused ? '已暂停' : '继续播放', 'play');
             e.preventDefault();
         }
     }
@@ -1449,9 +1593,17 @@ function initPlayer(videoUrl) {
     destroyProgressPreview();
     playbackRestoreApplied = false;
     autoplayMutedNoticeShown = false;
+    preferredRateApplied = false;
 
     // 销毁旧实例
     if (art) {
+        episodeDrawer?.destroy();
+        nextEpisodeCard?.destroy();
+        episodeDrawer = null;
+        nextEpisodeCard = null;
+        // 快捷键提示挂在播放器内，销毁前移回页面，避免随旧实例一起被删除
+        const hint = document.getElementById('shortcutHint');
+        if (hint) document.body.appendChild(hint);
         mobileFullscreenInteraction?.destroy();
         mobileFullscreenInteraction = null;
         if (playerSurfaceCleanup) {
@@ -1643,8 +1795,19 @@ function initPlayer(videoUrl) {
     mobileFullscreenInteraction = window.createMobileFullscreenControls(
         art.template.$player, art,
         { title: () => currentVideoTitle, isFullscreen: isPlayerFullscreenActive,
-          isTouchDevice: isMobilePlaybackDevice }
+          isTouchDevice: isMobilePlaybackDevice,
+          hasEpisodes: () => currentEpisodes.length > 1,
+          onEpisodes: toggleEpisodeDrawer }
     );
+    setupPlayerOverlays();
+    // 记住用户选择的倍速；新视频加载时浏览器会把倍速重置为 1（此时 readyState 为 0），不能记下来
+    art.video.addEventListener('ratechange', () => {
+        if (!art) return;
+        if (!temporaryRateActive && art.video.readyState >= 1) {
+            window.PlayerEnhancements.storeRate(art.video.playbackRate);
+        }
+        updateRateControl();
+    });
     art.video.addEventListener('webkitbeginfullscreen', () => maybeLockLandscapeOrientation());
     art.video.addEventListener('webkitendfullscreen', () => unlockLandscapeOrientation());
 
@@ -1721,6 +1884,7 @@ function initPlayer(videoUrl) {
     });
 
     art.on('video:loadedmetadata', function() {
+        applyPreferredPlaybackRate();
         if (isPlayerFullscreenActive()) maybeLockLandscapeOrientation();
         document.getElementById('player-loading').style.display = 'none';
         videoHasEnded = false; // 视频加载时重置结束标志
@@ -1771,14 +1935,13 @@ function initPlayer(videoUrl) {
 
         clearVideoProgress();
 
-        // 如果自动播放下一集开启，且确实有下一集
-        if (autoplayEnabled && currentEpisodeIndex < currentEpisodes.length - 1) {
-            // 稍长延迟以确保所有事件处理完成
+        // 如果自动播放下一集开启，且确实有下一集（用户在倒计时卡片上点了“取消”则不自动连播）
+        if (autoplayEnabled && !nextEpisodeCard?.dismissed && currentEpisodeIndex < currentEpisodes.length - 1) {
+            // 短暂延迟以确保所有事件处理完成
             setTimeout(() => {
-                // 确认不是因为用户拖拽导致的假结束事件
                 playNextEpisode();
                 videoHasEnded = false; // 重置标志
-            }, 1000);
+            }, 300);
         } else {
             art.fullscreen = false;
         }
@@ -1982,17 +2145,23 @@ function renderEpisodes() {
         // 根据倒序状态计算真实的剧集索引
         const realIndex = episodesReversed ? currentEpisodes.length - 1 - index : index;
         const isActive = realIndex === currentEpisodeIndex;
+        // 综艺等按日期/标题命名的集数显示名称，纯数字集名只显示序号
+        const label = window.PlayerEnhancements.episodeLabel(realIndex, currentEpisodeNames[realIndex]);
+        const titleText = escapeHtmlAttr(label.title || `第 ${label.number} 集`);
 
         html += `
             <button id="episode-${realIndex}" 
-                    onclick="playEpisode(${realIndex})" 
-                    class="px-4 py-2 ${isActive ? 'episode-active' : '!bg-[#222] hover:!bg-[#333] hover:!shadow-none'} !border ${isActive ? '!border-blue-500' : '!border-[#333]'} rounded-lg transition-colors text-center episode-btn">
-                ${realIndex + 1}
+                    onclick="playEpisode(${realIndex})" title="${titleText}"
+                    class="px-4 py-2 ${isActive ? 'episode-active' : '!bg-[#222] hover:!bg-[#333] hover:!shadow-none'} !border ${isActive ? '!border-blue-500' : '!border-[#333]'} rounded-lg transition-colors text-center episode-btn ${label.title ? 'episode-btn-titled' : ''}">
+                ${label.title ? `<span class="episode-btn-number">${label.number}</span><span class="episode-btn-title">${escapeHtmlAttr(label.title)}</span>` : label.number}
             </button>
         `;
     });
 
     episodesList.innerHTML = html;
+    episodesList.classList.toggle('episode-list-titled', html.includes('episode-btn-titled'));
+    episodeDrawer?.refresh();
+    updateEpisodeControlVisibility();
 }
 
 // 播放指定集数
@@ -2035,6 +2204,8 @@ function playEpisode(index) {
     currentVideoUrl = url;
     videoHasEnded = false; // 重置视频结束标志
     playbackRestoreApplied = false;
+    preferredRateApplied = false;
+    nextEpisodeCard?.reset();
     destroyProgressPreview();
 
     clearVideoProgress();
@@ -2439,7 +2610,8 @@ function setupLongPressSpeedControl() {
                 return;
             }
 
-            // 长按超过500ms，设置为3倍速
+            // 长按超过500ms，设置为3倍速（临时倍速，不写入记忆）
+            temporaryRateActive = true;
             art.video.playbackRate = 3.0;
             isLongPress = true;
             showSpeedHint(3.0);
@@ -2461,6 +2633,7 @@ function setupLongPressSpeedControl() {
         if (isLongPress) {
             art.video.playbackRate = originalPlaybackRate;
             isLongPress = false;
+            setTimeout(() => { temporaryRateActive = false; }, 50);
             showSpeedHint(originalPlaybackRate);
 
             // 阻止长按后的点击事件
@@ -2481,6 +2654,7 @@ function setupLongPressSpeedControl() {
         if (isLongPress) {
             art.video.playbackRate = originalPlaybackRate;
             isLongPress = false;
+            setTimeout(() => { temporaryRateActive = false; }, 50);
         }
     });
 
@@ -2496,6 +2670,7 @@ function setupLongPressSpeedControl() {
         if (isLongPress) {
             art.video.playbackRate = originalPlaybackRate;
             isLongPress = false;
+            setTimeout(() => { temporaryRateActive = false; }, 50);
         }
 
         if (longPressTimer) {
