@@ -1237,15 +1237,16 @@ test('release metadata is bumped for this update', async () => {
 
   const changelog = await readProjectFile('CHANGELOG.md');
 
-  assert.equal(packageJson.version, '1.2.31');
-  assert.equal(lockJson.version, '1.2.31');
-  assert.equal(lockJson.packages[''].version, '1.2.31');
-  assert.match(config, /version:\s*'1\.2\.31'/);
-  assert.match(serviceWorker, /const APP_VERSION = '202610271400'/);
+  assert.equal(packageJson.version, '1.2.32');
+  assert.equal(lockJson.version, '1.2.32');
+  assert.equal(lockJson.packages[''].version, '1.2.32');
+  assert.match(config, /version:\s*'1\.2\.32'/);
+  assert.match(serviceWorker, /const APP_VERSION = '202610271630'/);
   assert.match(serviceWorker, /'\/js\/player-recommendations\.js'/);
   assert.match(serviceWorker, /'\/js\/mobile-fullscreen\.js'/);
   assert.match(serviceWorker, /'\/css\/theme\.css'/);
   assert.match(serviceWorker, /'\/js\/source-speed\.js'/);
+  assert.match(changelog, /## 1\.2\.32 - 2026-10-27[\s\S]*?release number together with the build time/);
   assert.match(changelog, /## 1\.2\.31 - 2026-10-27[\s\S]*?Keyboard shortcuts/);
   assert.match(changelog, /## 1\.2\.30 - 2026-10-27[\s\S]*?Skip intro and outro/);
   assert.match(changelog, /## 1\.2\.29 - 2026-10-27[\s\S]*?in-player episode list/);
@@ -1316,4 +1317,15 @@ test('version checker falls back to maintained Raw and keeps local version durin
   assert.equal(offlineResult.current, '202609230002');
   assert.equal(offlineResult.latest, null);
   assert.equal(offlineResult.hasUpdate, null);
+});
+
+test('footer version shows the release number with the build time', async () => {
+  const checker = await loadVersionChecker(async () => ({ ok: false }));
+  // Without SITE_CONFIG the build time is shown alone.
+  assert.equal(checker.formatVersionLabel('2026-10-27 14:00'), '2026-10-27 14:00');
+  checker.SITE_CONFIG = { version: '1.2.32' };
+  assert.equal(checker.formatVersionLabel('2026-10-27 14:00'), 'v1.2.31（2026-10-27 14:00）');
+  assert.equal(checker.formatVersionLabel(''), 'v1.2.31');
+  checker.SITE_CONFIG = { version: '<img onerror=x>' };
+  assert.equal(checker.formatVersionLabel('2026-10-27 14:00'), '2026-10-27 14:00');
 });

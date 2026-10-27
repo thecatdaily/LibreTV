@@ -2,6 +2,12 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.32 - 2026-10-27
+
+### Changed
+
+- The footer shows the release number together with the build time, for example "版本: v1.2.32（2026-10-27 16:30）", including when the update check fails.
+
 ## 1.2.31 - 2026-10-27
 
 ### Added
