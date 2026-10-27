@@ -139,6 +139,7 @@ let preferredRateApplied = false; // 每次加载只恢复一次记忆的倍速
 let skipMarks = { enabled: true, intro: 0, outro: 0 }; // 当前剧集的片头片尾标记
 let playerStats = null; // 「统计信息」面板（网络、缓冲、分片）
 let statsTracker = null; // 当前 HLS 实例的下载统计
+let videoEnhancer = null; // 画质增强（WebGL FSR 放大 + 锐化）
 // ready：新一集的元数据加载完成前，video.currentTime 仍是上一集的进度，不能据此跳过或预加载
 let skipState = { introDone: false, outroDone: false, preloaded: false, ready: false };
 let nextEpisodePreloadController = null;
@@ -1048,6 +1049,8 @@ function setupPlayerOverlays() {
     playbackNotice?.destroy();
     playerStats?.destroy();
     playerStats = null;
+    videoEnhancer?.destroy();
+    videoEnhancer = null;
     episodeDrawer = null;
     nextEpisodeCard = null;
     shortcutHelp = null;
@@ -1078,6 +1081,7 @@ function setupPlayerOverlays() {
     });
     skipMarks = window.PlayerEnhancements.readSkipMarks(currentVideoTitle);
     updateSkipSettings();
+    setupVideoEnhance(host);
     setupPlayerStats(host, statsWereOpen);
     if (!isMobilePlaybackDevice() && typeof art.setting?.update === 'function') {
         art.setting.update({
@@ -1098,6 +1102,28 @@ function setupPlayerOverlays() {
     updateEpisodeControlVisibility();
 }
 
+// 画质增强：设置里选「标准 / 锐利」后由 GPU 实时放大锐化，选择会记住；浏览器不支持 WebGL2 时不显示
+function setupVideoEnhance(host) {
+    if (!window.VideoEnhance?.isSupported() || !art?.video || typeof art.setting?.update !== 'function') return;
+    const { MODES } = window.VideoEnhance;
+    videoEnhancer = window.VideoEnhance.create({ host, video: art.video, notify: message => showToast(message, 'info') });
+    const saved = window.VideoEnhance.readMode();
+    const mode = saved === 'off' ? 'off' : videoEnhancer.setMode(saved, { remember: false });
+    try {
+        art.setting.update({
+            name: 'video-enhance',
+            html: '画质增强',
+            tooltip: MODES[mode].label,
+            selector: Object.entries(MODES).map(([value, item]) => ({ html: item.label, value, default: value === mode })),
+            onSelect(item) {
+                const applied = videoEnhancer?.setMode(item.value) || 'off';
+                showShortcutHint(applied === 'off' ? '画质增强：关闭' : `画质增强：${MODES[applied].label}`, 'right');
+                return MODES[applied].label;
+            }
+        });
+    } catch (error) { console.warn('更新播放设置失败:', error); }
+}
+
 // 「统计信息」：替换 ArtPlayer 自带的英文信息面板（它的关闭按钮会被画面点击抢走），右键菜单和播放设置里都能打开
 function setupPlayerStats(host, reopen) {
     if (!window.PlayerStats) return;
@@ -1108,7 +1134,8 @@ function setupPlayerStats(host, reopen) {
         getInfo: () => ({
             title: currentVideoTitle,
             episode: currentEpisodeCounterText(),
-            source: API_SITES?.[new URLSearchParams(location.search).get('source') || '']?.name || ''
+            source: API_SITES?.[new URLSearchParams(location.search).get('source') || '']?.name || '',
+            enhance: videoEnhancer?.describe() || ''
         })
     });
     const toggle = () => playerStats?.toggle();
