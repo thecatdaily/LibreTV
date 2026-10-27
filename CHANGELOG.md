@@ -2,6 +2,14 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.40 - 2026-10-28
+
+### Changed
+
+- Search results that merge the same title from several sources now show every version on the card, by category and best first (for example `HD · 正片 · TC`), instead of only the first source's note.
+- The 来源 list of a merged result tags each source with its version (HD, 正片, 更新TCV2…), clear versions first and camera copies highlighted; the player's 换源 list shows the same tags.
+- Quick play prefers clear versions: 4K/蓝光/1080P, then HD, then 正片 and other notes, then TC/TS/抢先 copies; within a version the most reliable source wins. A copy being watched still comes first so playback resumes. When the first answer is a TC/TS copy, quick play waits up to 3 seconds for slower sources to offer a clear one, and automatic retries follow the same order.
+
 ## 1.2.39 - 2026-10-28
 
 ### Changed

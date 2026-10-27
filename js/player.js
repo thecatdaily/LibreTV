@@ -3323,8 +3323,10 @@ async function showSwitchResourceModal() {
         row.dataset.current = String(isCurrent);
         row.setAttribute('role', 'listitem');
         const sourceName = resourceOptions.find(opt => opt.key === source)?.name || API_SITES[source]?.name || '未知资源';
+        const version = window.LibreExperience?.versionLabel(result) || '';
+        const versionClass = (window.LibreExperience?.versionRank(result) ?? 3) < 2 ? ' is-low' : '';
         row.innerHTML = `<div class="resource-switch-row-main"><strong>${escapeHtmlAttr(sourceName)}</strong>
-            ${isCurrent ? '<span class="resource-current-label">当前播放</span>' : ''}<small data-episode-count>集数待确认</small></div>
+            ${isCurrent ? '<span class="resource-current-label">当前播放</span>' : ''}${version ? `<span class="resource-version-tag${versionClass}">${escapeHtmlAttr(version)}</span>` : ''}<small data-episode-count>集数待确认</small></div>
             <div class="resource-switch-row-meta"><span data-speed-badge>${formatSpeedDisplay(null)}</span></div>`;
         if (!isCurrent) {
             const button = document.createElement('button');

@@ -70,15 +70,55 @@
         if (record.sourceName === item.source_code && String(record.vod_id) === String(item.vod_id)) return true;
         return Boolean(record.movieYear && record.movieKind && record.movieYear === info.year && record.movieKind === info.kind);
     }
+    // Version notes from the source (HD中字, TC, 更新至12集…) and how watchable each is:
+    // 5 = 4K/蓝光/1080P, 4 = HD, 3 = 正片/unknown/episode progress, 1 = TC/TS/抢先 camera copies, 0 = trailers.
+    const TRAILER_VERSION = /预告|花絮/;
+    const CAMERA_VERSION = /(?:^|[^a-z])(?:hd)?(?:tc|ts|cam)(?:v\d+)?(?![a-z])|抢先|枪版|尝鲜/i;
+    const TOP_VERSION = /4k|2160p|1080p|蓝光|原盘|杜比|(?:^|[^a-z])bd(?![a-z])/i;
+    const HD_VERSION = /hd|高清|超清|720p/i;
+    function versionLabel(item) {
+        return String(item?.vod_remarks || '').replace(/\s+/g, ' ').trim().slice(0, 16);
+    }
+    function versionRank(item) {
+        const label = versionLabel(item);
+        if (TRAILER_VERSION.test(label)) return 0;
+        if (CAMERA_VERSION.test(label)) return 1;
+        if (TOP_VERSION.test(label)) return 5;
+        if (HD_VERSION.test(label)) return 4;
+        // Among series, a finished copy, then the one with more episodes, wins.
+        if (/完结/.test(label)) return 3.9999;
+        const episodes = Number(label.match(/(\d{1,4})\s*集/)?.[1] || 0);
+        return 3 + Math.min(episodes, 9999) / 10000;
+    }
+    // Short category for a merged card: 4K / 蓝光 / HD / TC / 抢先版…; other notes as given.
+    function versionTag(item) {
+        const label = versionLabel(item);
+        const rank = versionRank(item);
+        if (!label) return '';
+        if (rank === 0) return '预告';
+        if (rank === 1) return /tc/i.test(label) ? 'TC' : /(?:^|[^a-z])(?:hd-?)?ts/i.test(label) ? 'TS' : '抢先版';
+        if (rank === 5) return /4k|2160p/i.test(label) ? '4K' : /1080p/i.test(label) && !/蓝光|原盘|bd/i.test(label) ? '1080P' : '蓝光';
+        if (rank === 4) return 'HD';
+        return /正片/.test(label) ? '正片' : label;
+    }
+    // Distinct version categories of a merged result, best first; only the most complete episode note.
+    function versionLabels(items) {
+        const best = new Map();
+        for (const item of items || []) {
+            const tag = versionTag(item);
+            if (tag && !(best.get(tag) >= versionRank(item))) best.set(tag, versionRank(item));
+        }
+        const ranked = [...best].sort((a, b) => b[1] - a[1]);
+        const progress = ranked.find(([tag, rank]) => rank >= 3 && rank < 4 && tag !== '正片');
+        return ranked.filter(entry => !(entry[1] >= 3 && entry[1] < 4 && entry[0] !== '正片') || entry === progress).map(([tag]) => tag);
+    }
     function chooseCandidate(items, request, records = []) {
         const valid = items.filter(item => window.QuickPlay.logic.matches(item, request));
         const history = unfinishedHistory(records).find(record => valid.some(item => matchingRecord(record, item)));
-        return [...valid].sort((a, b) => {
-            const historyA = history && matchingRecord(history, a) && history.sourceName === a.source_code && String(history.vod_id) === String(a.vod_id) ? 1000 : 0;
-            const historyB = history && matchingRecord(history, b) && history.sourceName === b.source_code && String(history.vod_id) === String(b.vod_id) ? 1000 : 0;
-            const health = source => window.SourceAutopilot?.score(source) ?? qualityScore(source);
-            return (historyB + health(b.source_code)) - (historyA + health(a.source_code));
-        })[0] || null;
+        // The copy being watched first, then the best version, then the most reliable source.
+        const value = item => (history && matchingRecord(history, item) && history.sourceName === item.source_code && String(history.vod_id) === String(item.vod_id) ? 100000 : 0) +
+            Math.floor(versionRank(item)) * 1000 + (window.SourceAutopilot?.score(item.source_code) ?? qualityScore(item.source_code));
+        return [...valid].sort((a, b) => value(b) - value(a))[0] || null;
     }
     function seriesStem(title, kind) {
         let stem = String(title || '').normalize('NFKC').trim();
@@ -146,5 +186,5 @@
             return 0;
         });
     }
-    window.LibreExperience = { groupResults, unfinishedHistory, watchLater, addWatchLater, removeWatchLater, recordQuality, recordStall, qualityScore, chooseCandidate, year, seriesStem, franchiseRecommendations, relatedRecommendations };
+    window.LibreExperience = { groupResults, unfinishedHistory, watchLater, addWatchLater, removeWatchLater, recordQuality, recordStall, qualityScore, chooseCandidate, versionLabel, versionRank, versionTag, versionLabels, year, seriesStem, franchiseRecommendations, relatedRecommendations };
 })();
