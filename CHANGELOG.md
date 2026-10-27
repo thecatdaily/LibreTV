@@ -2,6 +2,18 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.34 - 2026-10-27
+
+### Added
+
+- Home page Douban section has a 筛选 panel that combines genre, region, year or decade, and sort (综合排序 / 近期热度 / 最新上映 / 高分优先), for example 欧美 + 2026 + 高分优先. TV adds 电视剧 / 综艺 as a format with its own genres. Results load 24 at a time with 加载更多, cards show year and region, and the chosen filters are remembered. Picking a quick tag returns to the tag view. It uses the same recommend API as Douban's own explore page, through the site proxy.
+- Search results have a filter and sort bar: kind (电影 / 剧集 / 动漫 / 综艺 / 纪录片 / 短剧, with counts), year, region, and sort by relevance, newest year, rating or most recently updated. Kinds and regions are normalised across sources ("国产动漫" and "中国动漫", "大陆" and "中国大陆"), and genre-only type names fall back to the episode count. Cards show the rating when a source provides one.
+
+### Changed
+
+- Search results are ordered by relevance instead of alphabetically: exact titles first, then titles starting with the query, shorter titles before long spin-offs, then newer releases.
+- Search card buttons no longer wrap or get cut off in the four-column layout. "查看来源" is now "来源", and long source names are truncated.
+
 ## 1.2.33 - 2026-10-27
 
 ### Fixed

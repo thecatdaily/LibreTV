@@ -295,10 +295,15 @@
                         <div class="overflow-x-auto">
                             <div id="douban-tags" class="flex min-w-max"></div>
                         </div>
+                        <!-- 组合筛选：类型 / 地区 / 年代 / 排序 -->
+                        <div id="douban-filter-panel" class="douban-filter-panel" hidden></div>
                     </div>
 
                     <!-- 推荐内容 -->
                     <div id="douban-results" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3"></div>
+                    <div class="douban-more-wrap">
+                        <button id="douban-more" type="button" class="lt-btn lt-btn-sm" style="display: none">加载更多</button>
+                    </div>
                 </div>
             </section>
 
@@ -312,6 +317,8 @@
                             <span id="searchProgress" class="search-progress" aria-live="polite"></span>
                         </div>
                     </div>
+                    <!-- 类型 / 年份 / 地区筛选与排序 -->
+                    <div id="searchFilterBar" class="search-filter-bar" hidden></div>
                     <div id="results" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                         <!-- 结果将在这里动态生成 -->
                     </div>
@@ -447,9 +454,11 @@
     <script src="js/customer_site.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/api.js"></script>
+    <script src="js/douban-filter.js"></script>
     <script src="js/douban.js"></script>
     <script src="js/password.js"></script>
     <script src="js/search.js"></script>
+    <script src="js/search-filter.js"></script>
     <script src="js/quick-play.js"></script>
     <script src="js/experience.js"></script>
     <script src="js/episode-context.js"></script>
