@@ -1323,9 +1323,9 @@ test('footer version shows the release number with the build time', async () => 
   const checker = await loadVersionChecker(async () => ({ ok: false }));
   // Without SITE_CONFIG the build time is shown alone.
   assert.equal(checker.formatVersionLabel('2026-10-27 14:00'), '2026-10-27 14:00');
-  checker.SITE_CONFIG = { version: '1.2.32' };
-  assert.equal(checker.formatVersionLabel('2026-10-27 14:00'), 'v1.2.31（2026-10-27 14:00）');
-  assert.equal(checker.formatVersionLabel(''), 'v1.2.31');
+  checker.SITE_CONFIG = { version: '9.9.9' };
+  assert.equal(checker.formatVersionLabel('2026-10-27 14:00'), 'v9.9.9（2026-10-27 14:00）');
+  assert.equal(checker.formatVersionLabel(''), 'v9.9.9');
   checker.SITE_CONFIG = { version: '<img onerror=x>' };
   assert.equal(checker.formatVersionLabel('2026-10-27 14:00'), '2026-10-27 14:00');
 });
