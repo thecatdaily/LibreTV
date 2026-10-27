@@ -165,6 +165,8 @@ node --check service-worker.js
 git diff --check -- . ':(exclude)package-lock.json'
 ```
 
+页面样式里的 Tailwind 类已预先编译到 `css/tailwind.css`（随仓库提交，Pages 无需构建）。在 HTML 或 JS 里新增、修改 Tailwind 类后运行 `npm run build:css` 重新生成；类名要完整写出（不要拼接成 `bg-${color}`），否则扫描不到。`npm test` 会检查该文件是否过期。
+
 CI 会在 push 和 pull request 上运行测试、JS 语法检查和基础静态检查。
 公开维护时建议使用分支和 PR 合并流程，`main` 只作为通过 CI 后的生产部署分支。
 

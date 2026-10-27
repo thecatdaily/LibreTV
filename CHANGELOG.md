@@ -2,6 +2,17 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.39 - 2026-10-28
+
+### Changed
+
+- Pages load much faster: Tailwind classes are now prebuilt into `css/tailwind.css` (about 28 KB) instead of being compiled in the browser by a 407 KB runtime on every visit. On a throttled phone, first paint on the home page drops from about 1.3 s to 0.34 s and on the player page from about 1.16 s to 0.31 s; script time on the home page drops from 418 ms to 48 ms. Rendering is unchanged, verified element by element against the previous version. Run `npm run build:css` after changing Tailwind classes; `npm test` reports a stale file.
+- About page: the header now matches the rest of the site (brand mark, centred title, home button) instead of squeezing the logo and title together on phones.
+
+### Fixed
+
+- The offline page (shown when the network is unavailable) had no styles because it never loaded Tailwind; it now renders as designed.
+
 ## 1.2.38 - 2026-10-28
 
 ### Changed
