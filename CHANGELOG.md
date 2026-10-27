@@ -2,6 +2,12 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.38 - 2026-10-28
+
+### Changed
+
+- Douban filter: shorter region labels, using the short region names that Douban's recommend API also accepts.
+
 ## 1.2.37 - 2026-10-28
 
 ### Added

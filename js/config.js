@@ -17,7 +17,7 @@ const SITE_CONFIG = {
     url: '',
     description: '免费在线视频搜索与观看平台',
     logo: 'image/logo.png',
-    version: '1.2.37'
+    version: '1.2.38'
 };
 
 const DEFAULT_SELECTED_APIS = ['ysgc', 'ffzy', 'bfzy', 'jszy', 'wujin'];
