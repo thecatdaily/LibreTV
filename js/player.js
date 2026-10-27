@@ -2061,8 +2061,10 @@ function initPlayer(videoUrl) {
                 });
 
                 // 监听分段加载事件
-                hls.on(Hls.Events.FRAG_LOADED, function () {
+                hls.on(Hls.Events.FRAG_LOADED, function (event, data) {
                     recovery.progress();
+                    // 分片可能在另一个域名上，记下来供“路由器直连规则”使用
+                    window.SourceHosts?.learnUrl(data?.frag?.url);
                     document.getElementById('player-loading').style.display = 'none';
                 });
 

@@ -166,6 +166,12 @@ function initializeDefaultSettings() {
     }
 
     let changed = false;
+    // 已下线的内置源（例如关闭了关键词搜索的站）从选择里去掉；自定义源保留
+    const stillAvailable = selectedAPIs.filter(apiId => apiId.startsWith('custom_') || API_SITES[apiId]);
+    if (stillAvailable.length !== selectedAPIs.length) {
+        selectedAPIs = stillAvailable;
+        changed = true;
+    }
     defaultApiIds.forEach(apiId => {
         if (!selectedAPIs.includes(apiId)) {
             selectedAPIs.push(apiId);
@@ -236,13 +242,19 @@ function initAPICheckboxes() {
         const checked = selectedAPIs.includes(apiKey);
 
         const checkbox = document.createElement('div');
-        checkbox.className = 'flex items-center';
+        checkbox.className = 'flex items-center min-w-0';
+        // 同一家的镜像站标“同源”：内容相同，选一个即可
+        const mirrors = api.family
+            ? Object.keys(API_SITES).filter(key => key !== apiKey && API_SITES[key].family === api.family).map(key => API_SITES[key].name)
+            : [];
         checkbox.innerHTML = `
             <input type="checkbox" id="api_${apiKey}" 
                    class="form-checkbox h-3 w-3 text-blue-600 bg-[#222] border border-[#333]" 
                    ${checked ? 'checked' : ''} 
                    data-api="${apiKey}">
-            <label for="api_${apiKey}" class="ml-1 text-xs text-gray-400 truncate">${api.name}</label>
+            <label for="api_${apiKey}" class="ml-1 text-xs text-gray-400 truncate">${escapeHtmlAttr(api.name)}</label>
+            ${mirrors.length ? `<span class="api-mirror-tag" title="${escapeHtmlAttr(`与${mirrors.join('、')}内容相同（同一家的镜像站），选一个即可，其余可作备用`)}">同源</span>` : ''}
+            <span class="api-health-dot" data-health-for="${apiKey}" aria-hidden="true"></span>
         `;
         normaldiv.appendChild(checkbox);
 
@@ -259,6 +271,7 @@ function initAPICheckboxes() {
 
     // 初始检查成人内容状态
     checkAdultAPIsSelected();
+    window.SourceAutopilot?.renderHealthDots();
 }
 
 // 添加成人API列表
@@ -1707,7 +1720,10 @@ function showGroupedSearchSources(index) {
     const heading = document.createElement('p');
     heading.textContent = `找到 ${group.length} 个来源，点击查看该来源详情或直接点影片卡片播放`;
     content.appendChild(heading);
-    group.forEach(item => {
+    // 按资源站体检和实际播放表现排序，靠谱的排前面
+    const order = window.SourceAutopilot ? window.SourceAutopilot.rank(group.map(item => item.source_code)) : [];
+    const ranked = [...group].sort((a, b) => order.indexOf(a.source_code) - order.indexOf(b.source_code));
+    ranked.forEach(item => {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'grouped-source-button';

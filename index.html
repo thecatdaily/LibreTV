@@ -59,6 +59,8 @@
             <!-- 数据源设置区域 -->
             <div class="lt-card">
                 <label class="lt-card-title">数据源设置</label>
+                <!-- 每日自动体检的结果：自动停用 / 推荐启用 -->
+                <div id="sourceAutopilotNotice" class="source-autopilot-notice" hidden></div>
 
                 <!-- 批量操作按钮 -->
                 <div class="flex flex-wrap gap-2 mb-3">
@@ -107,6 +109,13 @@
                         <button onclick="cancelAddCustomApi()" class="bg-[#444] hover:bg-[#555] text-white px-3 py-1 rounded text-xs">取消</button>
                     </div>
                 </div>
+            </div>
+
+            <!-- 路由器直连规则 -->
+            <div class="lt-card">
+                <label class="lt-card-title">路由器直连规则</label>
+                <p class="text-xs text-gray-500 mb-3">生成 OpenClash 可直接粘贴的直连（DIRECT）规则：资源站、视频 CDN、海报图片和豆瓣的域名。视频 CDN 域名会在搜索和播放时自动收集，隔段时间重新生成一次即可。</p>
+                <button type="button" onclick="showClashRules()" class="lt-btn lt-btn-sm">生成 OpenClash 直连规则</button>
             </div>
 
             <!-- 内容过滤设置区域 -->
@@ -449,6 +458,8 @@
     <script src="js/search-filter.js"></script>
     <script src="js/quick-play.js"></script>
     <script src="js/source-availability.js"></script>
+    <script src="js/source-autopilot.js"></script>
+    <script src="js/source-hosts.js"></script>
     <script src="js/experience.js"></script>
     <script src="js/episode-context.js"></script>
     <script src="js/modal-accessibility.js"></script>

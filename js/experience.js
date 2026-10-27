@@ -76,7 +76,8 @@
         return [...valid].sort((a, b) => {
             const historyA = history && matchingRecord(history, a) && history.sourceName === a.source_code && String(history.vod_id) === String(a.vod_id) ? 1000 : 0;
             const historyB = history && matchingRecord(history, b) && history.sourceName === b.source_code && String(history.vod_id) === String(b.vod_id) ? 1000 : 0;
-            return (historyB + qualityScore(b.source_code)) - (historyA + qualityScore(a.source_code));
+            const health = source => window.SourceAutopilot?.score(source) ?? qualityScore(source);
+            return (historyB + health(b.source_code)) - (historyA + health(a.source_code));
         })[0] || null;
     }
     function seriesStem(title, kind) {

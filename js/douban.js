@@ -448,10 +448,12 @@ async function fillAndSearchWithDouban(title) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
     
-    const preferredSource = API_SITES.dbzy ? 'dbzy' : DEFAULT_SELECTED_APIS.find(apiId => API_SITES[apiId]);
+    const preferredSource = DEFAULT_SELECTED_APIS.find(apiId => API_SITES[apiId]);
+    const hasSearchableSource = typeof selectedAPIs !== 'undefined' &&
+        (typeof getSearchableApiIds === 'function' ? getSearchableApiIds(selectedAPIs) : selectedAPIs).length > 0;
 
-    // 确保推荐搜索有可用资源源被选中
-    if (preferredSource && typeof selectedAPIs !== 'undefined' && !selectedAPIs.includes(preferredSource)) {
+    // 只有一个可搜索的源都没选时才自动补选默认源，不改动用户自己的选择
+    if (preferredSource && !hasSearchableSource && !selectedAPIs.includes(preferredSource)) {
         const sourceCheckbox = document.querySelector(`input[id="api_${preferredSource}"]`);
         if (sourceCheckbox) {
             sourceCheckbox.checked = true;

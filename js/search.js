@@ -108,6 +108,7 @@ async function fetchVodApiJson(apiUrl, headers = API_CONFIG.search.headers, oute
 
 function normalizeApiList(data, apiId, context) {
     if (!data || !Array.isArray(data.list)) return [];
+    window.SourceHosts?.learnItems(data.list);
     return data.list.map(item => withSourceInfo(item, apiId, context));
 }
 

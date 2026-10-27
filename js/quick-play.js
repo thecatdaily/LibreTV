@@ -89,7 +89,8 @@
     async function discover(session) {
         const selected = read('selectedAPIs', DEFAULT_SELECTED_APIS);
         const protectedContent = localStorage.getItem('yellowFilterEnabled') === 'true';
-        const sources = [...new Set([session.history?.sourceName, session.request.source, ...selected].filter(Boolean))]
+        const ranked = window.SourceAutopilot ? window.SourceAutopilot.rank(selected) : selected;
+        const sources = [...new Set([session.history?.sourceName, session.request.source, ...ranked].filter(Boolean))]
             .filter(source => !protectedContent || !(API_SITES[source]?.adult || (source.startsWith('custom_') && getCustomApiInfo(source.slice(7))?.isAdult)));
         let next = 0;
         await Promise.all(Array.from({ length: Math.min(4, sources.length) }, async () => {
