@@ -2,6 +2,12 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.43 - 2026-10-28
+
+### Added
+
+- Desktop player: a 下载 button between 换源 and 更多 (not shown on phones and tablets). 下载本集（MP4） downloads the current episode's segments (four at a time, with retries), removes ad segments as playback does, decrypts AES-128 segments and saves one MP4 named after the title and episode. TS streams are converted with mux.js 7.1.0 (Apache-2.0, `libs/mux-mp4.min.js`, loaded only when needed), restarting the timeline at every discontinuity so the file plays straight through; fMP4 streams are joined directly. Chrome and Edge write to the chosen file while downloading; other browsers save the file when it is complete. A panel at the bottom right shows progress, size, speed and time left, and can cancel; streams mux.js cannot read (such as H.265) can be saved as TS instead. 复制视频地址 copies the m3u8 address for download tools such as IDM or N_m3u8DL-RE.
+
 ## 1.2.42 - 2026-10-28
 
 ### Added

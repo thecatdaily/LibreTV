@@ -3164,6 +3164,7 @@ function renderResourceInfoBar() {
       </div>
       <div class="quick-player-actions">
         <button type="button" class="resource-switch-btn" id="switchResourceBtn" onclick="showSwitchResourceModal()">换源</button>
+        ${isMobilePlaybackDevice() || !window.PlayerDownload ? '' : '<button type="button" id="downloadVideoButton" aria-haspopup="menu" aria-expanded="false" onclick="toggleDownloadMenu(this)">下载</button>'}
         ${currentEpisodes.length > 1 ? '<button type="button" id="quickEpisodesButton" aria-expanded="false" onclick="toggleQuickEpisodes()">选集</button>' : ''}
         <button type="button" id="quickSettingsButton" aria-expanded="false" onclick="toggleQuickSettings()">更多</button>
       </div>
@@ -3171,6 +3172,63 @@ function renderResourceInfoBar() {
     document.querySelectorAll('.quick-episode-section').forEach(section => { section.hidden = true; });
     document.getElementById('quickMoreActions')?.replaceChildren();
     renderQuickMoreActions();
+}
+
+// ---- 下载（仅电脑版）：下载本集为 MP4，或复制视频地址交给下载工具 ----
+function downloadFileName() {
+    const title = currentVideoTitle || '视频';
+    if (currentEpisodes.length <= 1) return title;
+    const name = String(currentEpisodeNames[currentEpisodeIndex] || '').trim();
+    const number = `第${String(currentEpisodeIndex + 1).padStart(2, '0')}集`;
+    return name && !/^第?\s*\d+\s*集?$/.test(name) ? `${title} ${number} ${name}` : `${title} ${number}`;
+}
+
+function closeDownloadMenu() {
+    document.getElementById('downloadMenu')?.remove();
+    document.getElementById('downloadVideoButton')?.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('click', closeDownloadMenuOnOutsideClick, true);
+}
+
+function closeDownloadMenuOnOutsideClick(event) {
+    if (!event.target.closest('#downloadMenu, #downloadVideoButton')) closeDownloadMenu();
+}
+
+function toggleDownloadMenu(button) {
+    if (document.getElementById('downloadMenu')) { closeDownloadMenu(); return; }
+    const menu = document.createElement('div');
+    menu.id = 'downloadMenu';
+    menu.className = 'download-menu';
+    menu.setAttribute('role', 'menu');
+    const items = [
+        [window.PlayerDownload?.running ? '查看下载进度' : '下载本集（MP4）', () => {
+            window.PlayerDownload?.start({ url: currentVideoUrl, fileName: downloadFileName(), filterAds: adFilteringEnabled });
+        }],
+        ['复制视频地址', async () => {
+            try {
+                await navigator.clipboard.writeText(currentVideoUrl);
+                showToast('已复制视频地址，可粘贴到 IDM、N_m3u8DL-RE 等下载工具', 'success');
+            } catch {
+                window.prompt('复制下面的视频地址：', currentVideoUrl);
+            }
+        }]
+    ];
+    for (const [label, action] of items) {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.setAttribute('role', 'menuitem');
+        item.textContent = label;
+        item.onclick = () => { closeDownloadMenu(); action(); };
+        menu.appendChild(item);
+    }
+    const note = document.createElement('p');
+    note.textContent = '下载期间请保持本页打开，可以继续观看。';
+    menu.appendChild(note);
+    button.parentElement.style.position = 'relative';
+    button.after(menu);
+    // Right-aligned under the button, so it never runs past the card's edge.
+    menu.style.left = `${Math.max(0, button.offsetLeft + button.offsetWidth - menu.offsetWidth)}px`;
+    button.setAttribute('aria-expanded', 'true');
+    setTimeout(() => document.addEventListener('click', closeDownloadMenuOnOutsideClick, true), 0);
 }
 
 function renderQuickMoreActions() {
