@@ -585,6 +585,8 @@ function setupPlayerSurfaceToggle() {
         if (mobileFullscreenInteraction?.active) {
             consumeSurfaceEvent(event);
             if (mobileFullscreenInteraction.shouldSuppressClick()) return;
+            // A tap on the picture closes the settings opened from 更多.
+            if (art.setting?.show) { art.setting.show = false; return; }
             handleTouchTap(event, () => mobileFullscreenInteraction?.toggleChrome());
             return;
         }
