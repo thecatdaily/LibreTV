@@ -2,6 +2,13 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.47 - 2026-10-28
+
+### Fixed
+
+- Phone fullscreen showed two progress bars after tapping 更多: it switched on the player's own control bar, with its progress bar, while the fullscreen layer's bar stayed visible. 更多 now opens the player settings (speed, 画质增强, 统计信息, skip intro/outro…) above the fullscreen progress bar, on a solid, scrollable panel; tapping the picture closes it, and swipe gestures no longer start inside the panel.
+- A phone held sideways (not fullscreen) showed a player taller than the screen, with its control bar below the bottom edge. In short landscape screens the player now fits the screen height.
+
 ## 1.2.46 - 2026-10-28
 
 ### Changed

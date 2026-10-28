@@ -200,11 +200,10 @@ div.player-loading-text {
 }
 
 /* The fullscreen touch layer only exists while a mobile touch player is fullscreen. */
-.art-video-player.mobile-fullscreen-interaction:not(.mobile-fullscreen-native-controls) .art-controls,
-.art-video-player.mobile-fullscreen-interaction:not(.mobile-fullscreen-native-controls) .art-bottom,
+.art-video-player.mobile-fullscreen-interaction .art-controls,
+.art-video-player.mobile-fullscreen-interaction .art-bottom,
 .art-video-player.mobile-fullscreen-interaction .art-state { display:none !important; }
 .art-video-player.mobile-fullscreen-interaction .player-top-actions { display:none; }
-.art-video-player.mobile-fullscreen-interaction.mobile-fullscreen-native-controls .player-top-actions { display:flex; }
 .mobile-fullscreen-chrome { position:absolute; inset:0; z-index:45; display:flex; flex-direction:column; justify-content:space-between; color:#fff; opacity:0; visibility:hidden; pointer-events:none; transition:opacity .18s ease,visibility .18s ease; background:linear-gradient(180deg,rgba(0,0,0,.54),transparent 26%,transparent 60%,rgba(0,0,0,.55)); }
 .mobile-fullscreen-level { position:absolute; top:max(14px,env(safe-area-inset-top)); left:50%; transform:translateX(-50%); z-index:60; display:none; min-width:min(250px,55vw); padding:8px 12px; border-radius:9px; background:rgba(0,0,0,.78); color:white; font-size:13px; text-align:center; pointer-events:none; }
 .art-video-player.mobile-fullscreen-interaction.mobile-fullscreen-chrome-visible .mobile-fullscreen-chrome { opacity:1; visibility:visible; }
@@ -221,7 +220,6 @@ div.player-loading-text {
 .mobile-fullscreen-footer { padding:0 max(20px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)); pointer-events:none; }
 .mobile-fullscreen-seek { display:block; width:100%; height:32px; margin:0; accent-color:#8b5cf6; cursor:pointer; pointer-events:auto; }
 .mobile-fullscreen-time { display:block; text-align:right; font-variant-numeric:tabular-nums; font-size:12px; }
-.art-video-player.mobile-fullscreen-native-controls .mobile-fullscreen-footer { padding-bottom:70px; }
 
 @media (max-width: 640px) and (orientation: portrait) {
     #player.mobile-portrait-compact-controls .art-controls-left .art-control,
@@ -1250,3 +1248,23 @@ input:checked + .slider:before {
 
 .video-enhance-canvas[hidden] { display: none; }
 .art-video-player.video-enhance-on .art-video { opacity: 0 !important; }
+
+/* 手机横着拿、未全屏时：播放器不超过屏幕高度，控制栏留在屏幕内 */
+@media (orientation: landscape) and (max-height: 520px) {
+    /* 高度由 16:9 比例和宽度决定，所以限制宽度 */
+    #player.player-placeholder {
+        max-width: calc((100dvh - 104px) * 16 / 9);
+        min-height: 0;
+        margin: 0 auto;
+    }
+}
+
+/* 全屏层里「更多」打开的设置菜单：放在进度条上方，不透明，过长时可滚动 */
+.art-video-player.mobile-fullscreen-interaction .art-settings {
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 64px);
+    right: max(12px, env(safe-area-inset-right));
+    max-height: calc(100% - max(14px, env(safe-area-inset-top)) - 140px);
+    background: rgba(14, 14, 28, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+}

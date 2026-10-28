@@ -59,7 +59,7 @@ window.createMobileFullscreenControls = function createMobileFullscreenControls(
 
     function hideChrome() {
         clearTimeout(chromeTimer);
-        player.classList.remove('mobile-fullscreen-chrome-visible', 'mobile-fullscreen-native-controls');
+        player.classList.remove('mobile-fullscreen-chrome-visible');
         art.controls.show = false;
     }
 
@@ -102,7 +102,7 @@ window.createMobileFullscreenControls = function createMobileFullscreenControls(
     }
 
     function onStart(event) {
-        if (!active || event.touches.length !== 1 || event.target.closest('button, input, .art-controls, .art-setting, .player-top-actions, .player-episode-drawer, .player-next-card, .player-shortcut-help, .player-stats-panel')) return;
+        if (!active || event.touches.length !== 1 || event.target.closest('button, input, .art-controls, .art-setting, .art-settings, .player-top-actions, .player-episode-drawer, .player-next-card, .player-shortcut-help, .player-stats-panel')) return;
         const touch = event.touches[0];
         const bounds = player.getBoundingClientRect();
         gesture = {
@@ -205,10 +205,12 @@ window.createMobileFullscreenControls = function createMobileFullscreenControls(
         options.onEpisodes?.();
         showChrome();
     });
+    // 更多 opens the player settings (speed, 画质增强, 统计信息…) instead of a second control bar,
+    // which would bring its own progress bar next to the fullscreen one.
     chrome.querySelector('.mobile-fullscreen-more').addEventListener('click', () => {
-        const visible = !player.classList.contains('mobile-fullscreen-native-controls');
-        player.classList.toggle('mobile-fullscreen-native-controls', visible);
-        art.controls.show = visible;
+        // ArtPlayer closes its settings on any click outside them, this one included: open after it.
+        const open = !art.setting.show;
+        setTimeout(() => { art.setting.show = open; }, 0);
         showChrome();
     });
     seek.addEventListener('input', onSeek);
@@ -232,7 +234,7 @@ window.createMobileFullscreenControls = function createMobileFullscreenControls(
             clearTimeout(chromeTimer);
             clearTimeout(levelTimer);
             video.style.filter = '';
-            player.classList.remove('mobile-fullscreen-interaction', 'mobile-fullscreen-chrome-visible', 'mobile-fullscreen-native-controls');
+            player.classList.remove('mobile-fullscreen-interaction', 'mobile-fullscreen-chrome-visible');
             player.removeEventListener('touchstart', onStart, true);
             player.removeEventListener('click', onFullscreenControl, true);
             player.removeEventListener('touchmove', onMove, true);

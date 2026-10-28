@@ -164,3 +164,18 @@ test('Douban cards replace the generic no-poster picture and say when a title ha
   assert.match(douban, /douban-unrated-badge[^>]*>暂无评分</);
   assert.match(await read('js/player-recommendations.js'), /SourceAvailability\.coverOf\(request\)/);
 });
+
+test('phone fullscreen has one progress bar: 更多 opens the settings instead of a second control bar', async () => {
+  const layer = await read('js/mobile-fullscreen.js');
+  assert.doesNotMatch(layer, /mobile-fullscreen-native-controls/);
+  assert.match(layer, /setTimeout\(\(\) => \{ art\.setting\.show = open; \}, 0\)/);
+  assert.match(layer, /\.art-setting, \.art-settings, \.player-top-actions/, 'gestures stay off the settings panel');
+  const css = await read('css/player.css');
+  assert.doesNotMatch(css, /native-controls/);
+  assert.match(css, /\.art-video-player\.mobile-fullscreen-interaction \.art-controls,\n\.art-video-player\.mobile-fullscreen-interaction \.art-bottom,/);
+  assert.match(css, /\.art-video-player\.mobile-fullscreen-interaction \.art-settings \{/);
+  // A phone held sideways keeps the whole player, controls included, on screen.
+  assert.match(css, /@media \(orientation: landscape\) and \(max-height: 520px\) \{[\s\S]*?max-width: calc\(\(100dvh - 104px\) \* 16 \/ 9\)/);
+  const player = await read('js/player.js');
+  assert.match(player, /if \(art\.setting\?\.show\) \{ art\.setting\.show = false; return; \}/);
+});
