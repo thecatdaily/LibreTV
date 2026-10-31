@@ -1,4 +1,4 @@
-const APP_VERSION = '202610311400';
+const APP_VERSION = '202610311530';
 const APP_SHELL_CACHE = `libretv-shell-${APP_VERSION}`;
 const OFFLINE_URL = '/offline.html';
 
@@ -85,18 +85,32 @@ function isNetworkOnlyRequest(request) {
   );
 }
 
+// Pages are cached under their path alone: player.html?url=…&title=… would otherwise leave one
+// copy per video watched (and keep a record of them). Offline, any player link opens the cached
+// page shell.
+function cacheKeyFor(request) {
+  if (request.mode !== 'navigate') return request;
+  const url = new URL(request.url);
+  return url.origin + url.pathname;
+}
+
 async function networkFirst(request) {
   const cache = await caches.open(APP_SHELL_CACHE);
+  const key = cacheKeyFor(request);
 
   try {
     const response = await fetch(request);
-    if (response && response.ok) {
-      cache.put(request, response.clone());
+    if (response && response.ok && response.type === 'basic' && !response.redirected) {
+      cache.put(key, response.clone());
     }
     return response;
   } catch (error) {
-    const cached = await cache.match(request);
-    return cached || cache.match(OFFLINE_URL) || cache.match('/');
+    const cached = await cache.match(key);
+    if (cached) return cached;
+    if (request.mode === 'navigate') {
+      return (await cache.match(OFFLINE_URL)) || (await cache.match('/')) || Response.error();
+    }
+    return Response.error();
   }
 }
 
@@ -122,7 +136,8 @@ async function cacheFirstWithRefresh(request) {
     })
     .catch(() => null);
 
-  return cached || refresh || fetch(request);
+  if (cached) return cached;
+  return (await refresh) || Response.error();
 }
 
 self.addEventListener('install', event => {

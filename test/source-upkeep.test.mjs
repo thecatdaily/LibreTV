@@ -65,6 +65,27 @@ test('a selected source is stopped only after repeated failures, and a healthy m
   assert.deepEqual(plain(outcome.disable), [], 'an adult source does not count as a searchable fallback');
 });
 
+test('adult, custom and restored sources are not stopped for an empty probe, and an outage run is ignored', async () => {
+  const { decide, isOutage } = (await load('js/source-autopilot.js', 'SourceAutopilot')).logic;
+  const healthy = days(['ok', 'ok', 'ok']);
+  const empty = days(['failed', 'failed', 'failed']);
+  const unreachable = empty.map(item => ({ ...item, reason: '无法访问' }));
+  const base = { ysgc: healthy, ffzy: healthy };
+
+  let outcome = decide({ history: { ...base, ckzy: empty, custom_0: empty }, selected: ['ysgc', 'ffzy', 'ckzy', 'custom_0'], siteMap });
+  assert.deepEqual(plain(outcome.disable), [], 'no title match on an adult or custom source is not a failure');
+  outcome = decide({ history: { ...base, custom_0: unreachable }, selected: ['ysgc', 'ffzy', 'custom_0'], siteMap });
+  assert.deepEqual(plain(outcome.disable).map(item => item.id), ['custom_0'], 'an unreachable custom source still stops');
+
+  outcome = decide({ history: { ...base, jszy: empty }, selected: ['ysgc', 'jszy'], siteMap, state: { kept: { jszy: 1 } } });
+  assert.deepEqual(plain(outcome.disable), [], 'a source restored by hand stays on');
+
+  const down = { status: 'failed', reason: '无法访问' };
+  assert.equal(isOutage([['a', down], ['b', down], ['c', { status: 'ok' }]]), true);
+  assert.equal(isOutage([['a', down], ['b', { status: 'ok' }], ['c', { status: 'ok' }]]), false);
+  assert.equal(isOutage([['a', down]]), false, 'one source alone is not an outage');
+});
+
 test('suggestions are healthy, unselected, not mirrors of a selected source and respect dismissals', async () => {
   const { decide } = (await load('js/source-autopilot.js', 'SourceAutopilot')).logic;
   const now = Date.parse('2026-10-28T12:00:00Z');
@@ -141,4 +162,25 @@ test('existing users lose removed sources and gain the new defaults once', async
   }
   assert.match(index, /onclick="showClashRules\(\)"/);
   assert.match(index, /id="sourceAutopilotNotice"/);
+});
+
+test('config import skips malformed values and exports the newer settings', async () => {
+  const sandbox = { window: { DEFAULT_API_MIGRATION_VERSION: '1' }, console, sha256: async text => text.length.toString(16) };
+  vm.runInNewContext(await read('js/config-manager.js'), sandbox);
+  const { validateAndMigrateConfig, CONFIG_STORAGE_KEYS } = sandbox.window;
+  for (const key of ['watchLaterV1', 'userMovieTags', 'doubanFilterV1', 'danmakuMode']) assert.ok(CONFIG_STORAGE_KEYS.includes(key), key);
+
+  const result = await validateAndMigrateConfig({
+    name: 'LibreTV-Settings',
+    version: '2.0.0',
+    data: {
+      selectedAPIs: 'ysgc',
+      customAPIs: JSON.stringify([{ name: '<img src=x onerror=alert(1)>', url: 'javascript:alert(1)' }]),
+      viewingHistory: JSON.stringify([{ title: 'a', episodeIndex: '1<script>' }]),
+      watchLaterV1: JSON.stringify([{ title: 'b' }]),
+      doubanEnabled: 'true'
+    }
+  });
+  assert.deepEqual(Object.keys(result.data).sort(), ['defaultApiMigrationVersion', 'doubanEnabled', 'hasInitializedDefaults', 'watchLaterV1']);
+  assert.equal(result.migrationMessages.filter(text => text.startsWith('已跳过')).length, 3);
 });

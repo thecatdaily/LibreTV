@@ -408,22 +408,26 @@ div.player-loading-text {
     overflow-y: auto;
 }
 
-/* 恢复播放位置提示样式 */
+/* 恢复播放位置提示：显示在画面下方、控制栏之上，全屏时也跟着画面 */
 .position-restore-hint {
-    position: fixed;
-    bottom: 20px;
+    position: absolute;
+    bottom: 64px;
     left: 50%;
-    transform: translateX(-50%) translateY(100%);
-    background-color: rgba(0, 0, 0, 0.8);
+    transform: translateX(-50%) translateY(12px);
+    background-color: rgba(0, 0, 0, 0.75);
     color: white;
-    padding: 10px 20px;
-    border-radius: 4px;
-    z-index: 1000;
-    transition: transform 0.3s ease;
+    padding: 8px 16px;
+    border-radius: 6px;
+    z-index: 60;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease;
     font-size: 14px;
+    white-space: nowrap;
 }
 
 .position-restore-hint.show {
+    opacity: 1;
     transform: translateX(-50%) translateY(0);
 }
 

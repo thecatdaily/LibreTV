@@ -2,6 +2,51 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.49 - 2026-10-31
+
+Whole-project audit: bugs found by reading every page's code, each confirmed in the browser or by a test before fixing.
+
+### Fixed
+
+- The adult-content filter (on by default) hid ordinary titles. It matched words such as 成人, 福利 and 情色 anywhere in the title, the synopsis or the genre tags, so 长大成人, 孤儿 (福利院 in the synopsis), 爱情色香味, 摩登家庭 and 铁皮鼓 disappeared from results. Measured on four default sources and eight common words: 147 of 3,733 results were hidden, about 85 of them ordinary titles. Now category words (伦理片, 福利, 理论片…) are matched against the source's category only, and titles only against unambiguous words; synopses and genre tags are not read. Same measurement afterwards: 78 hidden, one of them arguably ordinary. Douban cards are only filtered when the switch is on.
+- Home page Douban tags (热门, 最新, 美剧, 动作…) loaded nothing from servers outside mainland China: `movie.douban.com/j/search_subjects` redirects those requests to Douban's bot check, and the third-party fallback (`api.allorigins.win`) no longer answered. Tags now use the same mobile API as the filter panel (`m.douban.com/rexxar`): chart tags via `subject/recent_hot`, genre and custom tags via the recommend tag search. The fallback is removed, 换一批 wraps at the end of short lists, and switching 电影 / 电视剧 starts from the first page.
+- Phones: dragging the inline progress bar did nothing, and every tap or drag on it threw `art.seek is not a function` (an old handler called `seek` as a function and stopped the player's own handler). The handler is removed; ArtPlayer's own seeking is used.
+- Desktop: double-clicking the picture to go fullscreen also paused the video.
+- 继续观看 → 全部历史 opened the history panel and closed it again in the same click.
+- Daily source check-up:
+  - It stopped adult and custom sources because they returned no result for the probe title. For those, only being unreachable counts now.
+  - 恢复 on a stopped source did not stick (the next run stopped it again). A source restored by hand now stays on.
+  - A run where most sources are unreachable (offline, proxy down) is no longer recorded.
+  - The diagnostics page's 检测源 no longer unselects sources when most checks fail, and never leaves none selected.
+- Safari 17+ (iPhone, Mac): right after hls.js attached through its own `<source>` element, the AirPlay helper replaced that element's address with the playlist, so Safari played the stream natively and the ad filter, quality menu and stats were bypassed. AirPlay now gets a separate HLS `<source>` after hls.js's. Not tested on a real Safari here.
+- The 「已从 xx 继续播放」 hint was added to a hidden section and never seen; it now shows on the picture, also in fullscreen.
+- 画质增强: if the GPU dropped the WebGL context, the picture stayed black with sound. It now falls back to the plain picture and says so.
+- 换源 matched other sources' copies by title only, so for remakes (红楼梦 1987 / 2010) it could switch to a different work. The release year must now agree within a year when both sides have one.
+- A damaged `selectedAPIs` / `customAPIs` value in local storage stopped the home and player scripts. It now falls back to the defaults.
+- Config export now includes 稍后看, custom Douban tags, the Douban filter, danmaku / enhance / speed / skip settings and the check-up state. Imports skip values of the wrong shape instead of storing them, URL import accepts files served as `text/plain` (GitHub raw), and import errors show their real reason.
+- 重试 did nothing for MP4 or natively played video; it now reloads and returns to the same position.
+- The progress-bar preview lived outside the element that goes fullscreen, so in fullscreen it was invisible yet still downloaded preview segments.
+
+### Security
+
+- Proxy responses (Cloudflare, Node/Docker, Vercel, Netlify) are served from the site's own origin, and upstream pages, scripts, `Set-Cookie` and `Service-Worker-Allowed` were passed through, so a crafted proxy link could run script on the site or install a service worker. HTML / script responses are now sent as plain text, those headers are dropped, and every proxied response carries `X-Content-Type-Options: nosniff` and a sandboxing `Content-Security-Policy`. Vercel and Netlify no longer forward the visitor's Referer upstream.
+- The player's 上一页 followed any `returnUrl`, including `javascript:` links and other sites; only same-site addresses are followed now (also for the saved last page).
+- Custom source names / addresses and the episode number in viewing history were inserted into the page unescaped, so an imported config could run script.
+
+### Fixed (Node.js / Docker only)
+
+- Setting only `PASSWORD_HASH` (as the README describes) left the pages without a password and showed 「必须设置密码」.
+- Compressed upstream responses were cut short: the original `Content-Length` was forwarded after decompression.
+- Proxied addresses were URL-decoded twice, breaking links containing `%2B`, `%26` and the like.
+- The private-address block missed `127.0.0.2`, `[::1]`, link-local / cloud metadata (`169.254.169.254`, `100.100.100.200`) and redirects. Every connection, redirects included, now checks the resolved address (skipped when an outbound `HTTP(S)_PROXY` resolves names).
+- Range requests were not forwarded (MP4 seeking through the proxy) and speed tests (`probe=1`) downloaded whole files; both now behave like the Cloudflare proxy.
+- Site pages, scripts and styles were cached for a day, so after an update browsers mixed new pages with old scripts. Only `libs/` and `image/` keep the long cache.
+
+### Changed
+
+- The service worker cached every visited page address, query string included (one copy per video watched); pages are now cached by path, and offline fallbacks no longer hand an HTML page to failed script or data requests.
+- Removed unused code (old aggregated search, Douban tag fetch, search helpers, a status widget, a redundant proxy auth check) and two unused upstream images (`image/nomedia.png`, `.psd`, 256 KB).
+
 ## 1.2.48 - 2026-10-31
 
 ### Added
