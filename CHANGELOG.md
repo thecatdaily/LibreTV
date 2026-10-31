@@ -2,6 +2,19 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.50 - 2026-10-31
+
+### Security
+
+- Dependency upgrades for GitHub's Dependabot alerts (50 alerts across 10 npm packages; `npm audit` now reports 0):
+  - `axios` 1.9.0 → 1.21.0 (high), with its `follow-redirects` 1.16.2 (moderate) and `form-data` 4.0.6 (critical).
+  - Through `express` 5.1: `proxy-addr` 2.0.8 (critical), `path-to-regexp` 8.4.2 (high), `body-parser` 2.4.0 (high), `qs` 6.17.1 (moderate).
+  - Tailwind build tools: `picomatch`, `brace-expansion` and `minimatch` (high) updated in the lockfile.
+  - All are lockfile updates within the declared ranges; `axios` now requires at least 1.21.0.
+- `nodemon` is removed: even its latest release depends on a vulnerable `minimatch` 3.x, and npm's only fix was a downgrade to nodemon 1.0.2. `npm run dev` now uses Node's built-in `node --watch server.mjs` (restarts when the server code changes; pages, scripts and styles are read fresh on every request anyway). `nodemon.json` is deleted.
+
+Checked after the upgrade: unit tests pass; `npm ci --omit=dev` (the Docker install) from the new lockfile; the Node proxy end to end (gzip bodies complete, `%2B` / `%26` kept, HTML sent as plain text, `Set-Cookie` dropped, private addresses refused, Range answered with 206); and that axios 1.21 calls the private-address DNS check on every redirect hop.
+
 ## 1.2.49 - 2026-10-31
 
 Whole-project audit: bugs found by reading every page's code, each confirmed in the browser or by a test before fixing.
