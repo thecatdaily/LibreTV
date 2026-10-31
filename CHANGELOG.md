@@ -2,6 +2,19 @@
 
 All notable changes to this maintained LibreTV fork are documented here.
 
+## 1.2.48 - 2026-10-31
+
+### Added
+
+- 弹幕 (on-screen comments). For the title and episode being played, the player looks the work up on 360 影视 (`api.so.360kan.com`), takes the same episode's page on Tencent Video, iQiyi or Mango TV, and loads that episode's public comments: Tencent and iQiyi straight from the browser (both allow cross-origin reads), Mango TV through the site's proxy. Youku is not used (its comment API needs signed requests) and 360 rarely lists Bilibili. Films on several platforms use the one with the most comments. Rendering uses ArtPlayer's official danmaku plugin (`libs/artplayer-plugin-danmuku.js`, v5.3.0, MIT) without the send box.
+  - Player settings → 弹幕: 关闭 / 稀疏 / 适中 / 密集, at most about 1 / 2 / 4 comments a second, keeping the most liked ones and dropping very long or repeated ones; remembered, and `D` toggles it. Phones show smaller text in the top half of the picture.
+  - Segments near the playback position load first, so comments usually appear within about 3 seconds while the rest fills in; a new episode loads its own comments. The setting and 统计信息 show the platform and count, or that none were found.
+  - Measured: 漫长的季节 episode 1 had 82,896 comments on Tencent Video (8,632 shown at 适中), 狂飙 loaded from iQiyi, 乘风破浪 from Mango TV.
+
+### Fixed
+
+- `js/api.js` treated every URL whose path starts with `/api/` as this site's own API, on any domain, which swallowed other services' requests (such as iQiyi's `pcw-api.iq.com/api/…`). Only same-origin `/api/` requests are handled now; `Request` objects are read correctly too.
+
 ## 1.2.47 - 2026-10-28
 
 ### Fixed

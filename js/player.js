@@ -140,6 +140,8 @@ let skipMarks = { enabled: true, intro: 0, outro: 0 }; // 当前剧集的片头�
 let playerStats = null; // 「统计信息」面板（网络、缓冲、分片）
 let statsTracker = null; // 当前 HLS 实例的下载统计
 let videoEnhancer = null; // 画质增强（WebGL FSR 放大 + 锐化）
+let danmakuPlugin = null; // 弹幕渲染（artplayer-plugin-danmuku）
+const danmakuState = { key: '', controller: null, result: null, status: '', lastOnMode: 'normal', queued: new Set() };
 // ready：新一集的元数据加载完成前，video.currentTime 仍是上一集的进度，不能据此跳过或预加载
 let skipState = { introDone: false, outroDone: false, preloaded: false, ready: false };
 let nextEpisodePreloadController = null;
@@ -1084,6 +1086,7 @@ function setupPlayerOverlays() {
     skipMarks = window.PlayerEnhancements.readSkipMarks(currentVideoTitle);
     updateSkipSettings();
     setupVideoEnhance(host);
+    setupDanmaku();
     setupPlayerStats(host, statsWereOpen);
     if (!isMobilePlaybackDevice() && typeof art.setting?.update === 'function') {
         art.setting.update({
@@ -1126,6 +1129,158 @@ function setupVideoEnhance(host) {
     } catch (error) { console.warn('更新播放设置失败:', error); }
 }
 
+// ---- 弹幕：设置里选「关闭 / 稀疏 / 适中 / 密集」（记住选择），按 D 开关；每集播放时按片名和集数查找 ----
+const DANMAKU_MODES = {
+    off: { label: '关闭', perSecond: 0 },
+    light: { label: '稀疏', perSecond: 1 },
+    normal: { label: '适中', perSecond: 2 },
+    dense: { label: '密集', perSecond: 4 }
+};
+
+function readDanmakuMode() {
+    try { const mode = localStorage.getItem('danmakuMode'); return DANMAKU_MODES[mode] ? mode : 'normal'; } catch { return 'normal'; }
+}
+
+function danmakuTooltip() {
+    const mode = readDanmakuMode();
+    return mode === 'off' ? '关闭' : [DANMAKU_MODES[mode].label, danmakuState.status].filter(Boolean).join(' · ');
+}
+
+function renderDanmakuSetting() {
+    if (!danmakuPlugin || typeof art?.setting?.update !== 'function') return;
+    const mode = readDanmakuMode();
+    try {
+        art.setting.update({
+            name: 'danmaku',
+            html: '弹幕',
+            tooltip: danmakuTooltip(),
+            selector: Object.entries(DANMAKU_MODES).map(([value, item]) => ({ html: item.label, value, default: value === mode })),
+            onSelect(item) {
+                setDanmakuMode(item.value);
+                return danmakuTooltip();
+            }
+        });
+    } catch (error) { console.warn('更新播放设置失败:', error); }
+}
+
+function setupDanmaku() {
+    danmakuState.controller?.abort();
+    Object.assign(danmakuState, { key: '', controller: null, result: null, status: '' });
+    danmakuPlugin = null;
+    if (!window.Danmaku || typeof window.artplayerPluginDanmuku !== 'function' || !art?.plugins) return;
+    const mode = readDanmakuMode();
+    if (mode !== 'off') danmakuState.lastOnMode = mode;
+    danmakuPlugin = art.plugins.artplayerPluginDanmuku || art.plugins.add(window.artplayerPluginDanmuku({
+        danmuku: [],
+        emitter: false,
+        speed: 7,
+        opacity: 0.85,
+        // Phones: smaller text in the top half, so the small inline player stays watchable.
+        fontSize: isMobilePlaybackDevice() ? 14 : 24,
+        margin: isMobilePlaybackDevice() ? [6, '50%'] : [10, '30%'],
+        antiOverlap: true,
+        synchronousPlayback: true,
+        visible: mode !== 'off'
+    })).artplayerPluginDanmuku;
+    renderDanmakuSetting();
+}
+
+// The plugin's load(list) appends to its queue and only load() with no argument clears it
+// (back to the empty list it was created with), so a density change clears first and
+// updates while segments arrive add only comments that are not queued yet.
+function clearDanmaku() {
+    danmakuState.queued.clear();
+    return danmakuPlugin?.load();
+}
+
+async function showDanmaku({ reset = false } = {}) {
+    if (!danmakuPlugin) return;
+    const mode = readDanmakuMode();
+    if (mode === 'off' || !danmakuState.result) {
+        danmakuPlugin.hide();
+        return;
+    }
+    if (reset) await clearDanmaku();
+    const fresh = window.Danmaku.thin(danmakuState.result.raw, DANMAKU_MODES[mode].perSecond)
+        .filter(item => {
+            const id = `${item.time}|${item.text}`;
+            if (danmakuState.queued.has(id)) return false;
+            danmakuState.queued.add(id);
+            return true;
+        });
+    if (fresh.length) await danmakuPlugin.load(fresh);
+    danmakuPlugin.show();
+}
+
+function setDanmakuMode(mode) {
+    const next = DANMAKU_MODES[mode] ? mode : 'normal';
+    try { localStorage.setItem('danmakuMode', next); } catch { /* storage blocked */ }
+    if (next !== 'off') danmakuState.lastOnMode = next;
+    showShortcutHint(next === 'off' ? '弹幕已关闭' : `弹幕：${DANMAKU_MODES[next].label}`, 'right');
+    if (next !== 'off' && !danmakuState.key) loadDanmakuForCurrentEpisode();
+    else showDanmaku({ reset: true });
+    renderDanmakuSetting();
+}
+
+function toggleDanmaku() {
+    setDanmakuMode(readDanmakuMode() === 'off' ? danmakuState.lastOnMode : 'off');
+}
+
+// Called when an episode's metadata is ready; a newer episode cancels a pending lookup.
+function loadDanmakuForCurrentEpisode() {
+    if (!danmakuPlugin) return;
+    if (readDanmakuMode() === 'off') {
+        // Forget the previous episode, so turning comments on later loads this one.
+        danmakuState.controller?.abort();
+        Object.assign(danmakuState, { key: '', controller: null, result: null, status: '' });
+        clearDanmaku();
+        return;
+    }
+    const params = new URLSearchParams(location.search);
+    const year = params.get('year') || '';
+    const key = [currentVideoTitle, year, currentEpisodeIndex].join('|');
+    if (key === danmakuState.key) return;
+    danmakuState.controller?.abort();
+    const controller = new AbortController();
+    Object.assign(danmakuState, { key, controller, result: null, status: '查找中…' });
+    clearDanmaku();
+    renderDanmakuSetting();
+    window.Danmaku.load({
+        title: currentVideoTitle,
+        year,
+        kind: params.get('kind') || (currentEpisodes.length > 1 ? 'tv' : ''),
+        index: currentEpisodeIndex,
+        duration: Number(art?.video?.duration) || 0,
+        from: Number(art?.video?.currentTime) || 0,
+        signal: controller.signal,
+        // Show what has arrived (around the playback position first) at most every 2 seconds.
+        onPartial: partial => {
+            if (controller.signal.aborted || danmakuState.key !== key) return;
+            const now = performance.now();
+            if (danmakuState.result && now - (danmakuState.shownAt || 0) < 2000) return;
+            danmakuState.shownAt = now;
+            danmakuState.result = partial;
+            danmakuState.status = `${partial.siteName} 加载中…`;
+            showDanmaku();
+        }
+    }).catch(() => null).then(result => {
+        if (controller.signal.aborted || danmakuState.key !== key) return;
+        danmakuState.result = result;
+        danmakuState.status = result ? `${result.siteName} ${result.raw.length.toLocaleString()} 条` : '这一集没有找到弹幕';
+        showDanmaku();
+        renderDanmakuSetting();
+    });
+}
+
+function danmakuSummary() {
+    if (!danmakuPlugin) return '';
+    if (readDanmakuMode() === 'off') return '关闭';
+    const { result } = danmakuState;
+    if (!result) return danmakuState.status || '';
+    const shown = window.Danmaku.thin(result.raw, DANMAKU_MODES[readDanmakuMode()].perSecond).length;
+    return `${result.siteName} · 显示 ${shown.toLocaleString()} / 共 ${result.raw.length.toLocaleString()} 条（${result.matched}）`;
+}
+
 // 「统计信息」：替换 ArtPlayer 自带的英文信息面板（它的关闭按钮会被画面点击抢走），右键菜单和播放设置里都能打开
 function setupPlayerStats(host, reopen) {
     if (!window.PlayerStats) return;
@@ -1137,7 +1292,8 @@ function setupPlayerStats(host, reopen) {
             title: currentVideoTitle,
             episode: currentEpisodeCounterText(),
             source: API_SITES?.[new URLSearchParams(location.search).get('source') || '']?.name || '',
-            enhance: videoEnhancer?.describe() || ''
+            enhance: videoEnhancer?.describe() || '',
+            danmaku: danmakuSummary()
         })
     });
     const toggle = () => playerStats?.toggle();
@@ -1854,6 +2010,9 @@ function handleKeyboardShortcuts(e) {
         case 'help':
             shortcutHelp?.toggle();
             break;
+        case 'danmaku':
+            toggleDanmaku();
+            break;
         case 'escape':
             if (shortcutHelp?.isOpen) shortcutHelp.close();
             else if (episodeDrawer?.isOpen) episodeDrawer.close();
@@ -2245,6 +2404,7 @@ function initPlayer(videoUrl) {
 
     art.on('video:loadedmetadata', function() {
         skipState.ready = true;
+        loadDanmakuForCurrentEpisode();
         applyPreferredPlaybackRate();
         if (isPlayerFullscreenActive()) maybeLockLandscapeOrientation();
         document.getElementById('player-loading').style.display = 'none';
