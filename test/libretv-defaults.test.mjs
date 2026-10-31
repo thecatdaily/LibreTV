@@ -50,6 +50,9 @@ function createElementStub(tagName = 'div') {
     onclick: null,
     dataset: {},
     style: {},
+    setAttribute() {},
+    removeAttribute() {},
+    addEventListener() {},
     classList: {
       add() {},
       remove() {},
@@ -752,7 +755,7 @@ test('player resource switch can search without loading homepage app script', as
 
   assert.equal(typeof sandbox.searchByAPIAndKeyWord, 'function');
   assert.equal(typeof sandbox.window.filterResultsByQuery, 'function');
-  assert.match(player, /JSON\.stringify\(DEFAULT_SELECTED_APIS\)/);
+  assert.match(player, /readStoredList\('selectedAPIs', \[\.\.\.DEFAULT_SELECTED_APIS\]\)/);
   assert.match(player, /Promise\.allSettled\(resourceOptions\.map/);
   assert.match(player, /未找到可切换资源/);
 
@@ -866,6 +869,7 @@ test('home page loads Douban recommendations once even when initialized twice', 
   const sandbox = {
     console,
     URL,
+    URLSearchParams,
     window: { scrollTo() {} },
     localStorage: {
       getItem(key) {
@@ -896,12 +900,12 @@ test('home page loads Douban recommendations once even when initialized twice', 
       }
     },
     fetch: async url => {
-      if (decodeURIComponent(String(url)).includes('search_subjects')) doubanListRequests += 1;
+      if (decodeURIComponent(String(url)).includes('/rexxar/api/v2/subject/recent_hot/')) doubanListRequests += 1;
       await new Promise(resolve => setTimeout(resolve, 5));
       return {
         ok: true,
         async json() {
-          return { subjects: [{ title: '世界的主人', rate: '7.5', cover: '', url: '' }] };
+          return { total: 1, items: [{ type: 'movie', id: '1', title: '世界的主人', rating: { value: 7.5 }, pic: { normal: '' } }] };
         }
       };
     },
@@ -913,6 +917,7 @@ test('home page loads Douban recommendations once even when initialized twice', 
   sandbox.scrollTo = () => {};
   vm.createContext(sandbox);
   vm.runInContext(await readProjectFile('js/config.js'), sandbox);
+  vm.runInContext(await readProjectFile('js/douban-filter.js'), sandbox);
   vm.runInContext(await readProjectFile('js/douban.js'), sandbox);
 
   // DOMContentLoaded, then again after the password check passes.
@@ -937,13 +942,14 @@ test('home page loads Douban recommendations once even when initialized twice', 
 
 test('normal douban cards filter adult-looking subjects from regular tags', async () => {
   const container = createElementStub('div');
+  let filterOn = 'true';
   const sandbox = {
     console,
     URL,
     window: {},
     localStorage: {
-      getItem() {
-        return null;
+      getItem(key) {
+        return key === 'yellowFilterEnabled' ? filterOn : null;
       },
       setItem() {}
     },
@@ -987,6 +993,46 @@ test('normal douban cards filter adult-looking subjects from regular tags', asyn
   assert.equal(container.children.length, 1);
   assert.match(container.children[0].innerHTML, /世界的主人/);
   assert.doesNotMatch(container.children[0].innerHTML, /美女主播/);
+
+  // With the filter switched off nothing is hidden.
+  filterOn = 'false';
+  const unfiltered = createElementStub('div');
+  sandbox.renderDoubanCards({
+    subjects: [
+      { title: '美女主播私拍', rate: '7.0', cover: '', url: 'https://movie.douban.com/subject/adult' },
+      { title: '世界的主人', rate: '7.5', cover: '', url: 'https://movie.douban.com/subject/normal' }
+    ]
+  }, unfiltered);
+  assert.equal(unfiltered.children.length, 2);
+});
+
+test('the adult filter matches categories and explicit titles, not synopses or ordinary titles', async () => {
+  const sandbox = {
+    console, URL, window: {},
+    localStorage: { getItem: key => (key === 'yellowFilterEnabled' ? 'true' : null), setItem() {} },
+    document: { addEventListener() {}, getElementById: () => null, querySelectorAll: () => [] },
+    setTimeout, clearTimeout, AbortController
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(await readProjectFile('js/config.js'), sandbox);
+  vm.runInContext(await readProjectFile('js/customer_site.js'), sandbox);
+  vm.runInContext(await readProjectFile('js/app.js'), sandbox);
+  const matches = item => sandbox.matchesYellowContent({ source_code: 'ysgc', ...item });
+
+  for (const item of [
+    { vod_name: '长大成人', type_name: '剧情片', vod_content: '一个少年长大成人的故事' },
+    { vod_name: '孤儿', type_name: '恐怖片', vod_content: '一对夫妇从福利院领养了女孩' },
+    { vod_name: '爱情色香味', type_name: '爱情片' },
+    { vod_name: '摩登家庭第四季', type_name: '欧美剧', vod_class: '喜剧,家庭,同性' },
+    { vod_name: '铁皮鼓', type_name: '战争片', vod_content: '拒绝长成成人的奥斯卡' }
+  ]) assert.equal(matches(item), false, item.vod_name);
+
+  for (const item of [
+    { vod_name: '某片', type_name: '伦理片' },
+    { vod_name: '某片', type_name: '理论片' },
+    { vod_name: '某片', type_name: '福利' },
+    { vod_name: '国产自拍合集', type_name: '其他' }
+  ]) assert.equal(matches(item), true, `${item.vod_name} / ${item.type_name}`);
 });
 
 test('playback errors are classified and offer one-click source switching', async () => {
@@ -1242,15 +1288,16 @@ test('release metadata is bumped for this update', async () => {
 
   const changelog = await readProjectFile('CHANGELOG.md');
 
-  assert.equal(packageJson.version, '1.2.48');
-  assert.equal(lockJson.version, '1.2.48');
-  assert.equal(lockJson.packages[''].version, '1.2.48');
-  assert.match(config, /version:\s*'1\.2\.48'/);
-  assert.match(serviceWorker, /const APP_VERSION = '202610311400'/);
+  assert.equal(packageJson.version, '1.2.49');
+  assert.equal(lockJson.version, '1.2.49');
+  assert.equal(lockJson.packages[''].version, '1.2.49');
+  assert.match(config, /version:\s*'1\.2\.49'/);
+  assert.match(serviceWorker, /const APP_VERSION = '202610311530'/);
   assert.match(serviceWorker, /'\/js\/player-recommendations\.js'/);
   assert.match(serviceWorker, /'\/js\/mobile-fullscreen\.js'/);
   assert.match(serviceWorker, /'\/css\/theme\.css'/);
   assert.match(serviceWorker, /'\/js\/source-speed\.js'/);
+  assert.match(changelog, /## 1\.2\.49 - 2026-10-31[\s\S]*?adult-content filter/);
   assert.match(changelog, /## 1\.2\.48 - 2026-10-31[\s\S]*?on-screen comments/);
   assert.match(changelog, /## 1\.2\.47 - 2026-10-28[\s\S]*?two progress bars/);
   assert.match(changelog, /## 1\.2\.46 - 2026-10-28[\s\S]*?README rewritten/);

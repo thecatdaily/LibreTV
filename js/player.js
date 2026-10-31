@@ -1,5 +1,14 @@
-const selectedAPIs = JSON.parse(localStorage.getItem('selectedAPIs') || JSON.stringify(DEFAULT_SELECTED_APIS));
-const customAPIs = JSON.parse(localStorage.getItem('customAPIs') || '[]'); // 存储自定义API列表
+// 本地设置损坏时回到默认值，不能让播放页脚本因此中断
+function readStoredList(key, fallback) {
+    try {
+        const value = JSON.parse(localStorage.getItem(key) || 'null');
+        return Array.isArray(value) ? value : fallback;
+    } catch (error) {
+        return fallback;
+    }
+}
+const selectedAPIs = readStoredList('selectedAPIs', [...DEFAULT_SELECTED_APIS]);
+const customAPIs = readStoredList('customAPIs', []); // 存储自定义API列表
 
 // 顶栏搜索：跳到首页的搜索结果（首页会把 ?s= 规范成 /s=）
 function submitPlayerSearch(event) {
@@ -28,6 +37,21 @@ function togglePlayerSearch(open) {
     }
 }
 
+function sameOriginUrl(value) {
+    if (!value) return '';
+    let candidate = String(value);
+    // 旧链接里的 returnUrl 可能被多编码了一层（http%3A%2F%2F… 或 %2F…）
+    if (/^(https?%3A|%2F)/i.test(candidate)) {
+        try { candidate = decodeURIComponent(candidate); } catch (e) { return ''; }
+    }
+    try {
+        const url = new URL(candidate, window.location.origin);
+        return url.origin === window.location.origin ? url.href : '';
+    } catch (e) {
+        return '';
+    }
+}
+
 // 改进返回功能
 function goBack(event) {
     // 防止默认链接行为
@@ -37,14 +61,15 @@ function goBack(event) {
     const urlParams = new URLSearchParams(window.location.search);
     const returnUrl = urlParams.get('returnUrl');
     
-    if (returnUrl) {
-        // 如果URL中有returnUrl参数，优先使用
-        window.location.href = decodeURIComponent(returnUrl);
+    // 只接受本站地址：javascript: 链接或外站地址都不能借「返回」打开
+    const safeReturnUrl = sameOriginUrl(returnUrl);
+    if (safeReturnUrl) {
+        window.location.href = safeReturnUrl;
         return;
     }
     
     // 2. 检查localStorage中保存的lastPageUrl
-    const lastPageUrl = localStorage.getItem('lastPageUrl');
+    const lastPageUrl = sameOriginUrl(localStorage.getItem('lastPageUrl'));
     if (lastPageUrl && lastPageUrl !== window.location.href) {
         window.location.href = lastPageUrl;
         return;
@@ -114,7 +139,6 @@ let currentEpisodeNames = [];
 let episodesReversed = false;
 let autoplayEnabled = true; // 默认开启自动连播
 let videoHasEnded = false; // 跟踪视频是否已经自然结束
-let userClickedPosition = null; // 记录用户点击的位置
 let shortcutHintTimeout = null; // 用于控制快捷键提示显示时间
 let adFilteringEnabled = true; // 默认开启广告过滤
 let progressSaveInterval = null; // 定期保存进度的计时器
@@ -597,9 +621,10 @@ function setupPlayerSurfaceToggle() {
             handleTouchTap(event, toggleControlsFromTap);
             return;
         }
+        // 双击的第二下也要拦住，否则播放器自己的单击处理会把视频暂停
+        consumeSurfaceEvent(event);
         if (event.detail > 1) return;
 
-        consumeSurfaceEvent(event);
         clearClickTimer();
         clickTimer = setTimeout(() => {
             clickTimer = null;
@@ -642,20 +667,26 @@ function prepareVideoForNativeCast(video = art?.video, url = getNativeCastVideoU
     if (!video) return '';
 
     try {
-        video.disableRemotePlayback = false;
-        video.removeAttribute('disableRemotePlayback');
         video.setAttribute('x-webkit-airplay', 'allow');
         video.setAttribute('webkit-playsinline', 'true');
         video.setAttribute('playsinline', 'true');
 
         if (url) {
-            let sourceElement = video.querySelector('source');
+            // On Safari 17+ hls.js plays through a <source src="blob:…"> it adds itself (Managed
+            // Media Source). That one must stay first and untouched, or Safari loads the playlist
+            // natively and the ad filter, quality menu and stats stop working. AirPlay gets its own
+            // HLS <source> after it, which is also what lets remote playback stay enabled.
+            let sourceElement = video.querySelector('source[data-native-cast]');
             if (!sourceElement) {
                 sourceElement = document.createElement('source');
+                sourceElement.dataset.nativeCast = 'true';
+                sourceElement.type = 'application/x-mpegURL';
                 video.appendChild(sourceElement);
             }
             sourceElement.src = url;
         }
+        video.disableRemotePlayback = false;
+        video.removeAttribute('disableRemotePlayback');
     } catch (e) {
     }
 
@@ -1619,7 +1650,8 @@ function setupProgressPreview() {
 
     const progressBar = document.querySelector('#player .art-control-progress') ||
         document.querySelector('#player .art-progress');
-    const playerEl = document.getElementById('player');
+    // 挂在播放器本体上：全屏的是它，挂在外层容器上全屏时会看不见、却仍在后台下载预览分片
+    const playerEl = art.template?.$player || document.getElementById('player');
     if (!progressBar || !playerEl) return;
 
     progressPreviewEl = document.createElement('div');
@@ -1867,11 +1899,6 @@ async function initializePageContent() {
 
     // 更新排序按钮状态
     updateOrderButton();
-
-    // 添加对进度条的监听，确保点击准确跳转
-    setTimeout(() => {
-        setupProgressBarPreciseClicks();
-    }, 1000);
 
     // 添加键盘快捷键事件监听
     document.addEventListener('keydown', handleKeyboardShortcuts);
@@ -2415,7 +2442,6 @@ function initPlayer(videoUrl) {
         setupPlayerTopActions();
         setupPlayerSurfaceToggle();
         setupPlayerControlDensity();
-        setupProgressBarPreciseClicks();
         setupProgressPreview();
         tryStartPlayback();
 
@@ -2563,8 +2589,14 @@ function retryInterruptedPlayback() {
     if (currentHls) {
         playbackRecovery?.reset();
         currentHls.startLoad();
-    } else if (currentVideoUrl && typeof art.switchQuality === 'function') {
-        art.switchQuality(currentVideoUrl);
+    } else if (art.video && currentVideoUrl) {
+        // MP4 / 原生播放：同一地址再 switchQuality 会被播放器忽略，直接重新加载并回到原位置
+        const video = art.video;
+        const position = video.currentTime;
+        video.addEventListener('loadedmetadata', () => {
+            if (position > 0) video.currentTime = position;
+        }, { once: true });
+        video.load();
     }
     if (art.video?.paused) tryStartPlayback();
 }
@@ -2801,7 +2833,6 @@ function playEpisode(index) {
     renderEpisodes();
 
     // 重置用户点击位置记录
-    userClickedPosition = null;
 
     // 三秒后保存到历史记录
     setTimeout(() => saveToHistory(), 3000);
@@ -2857,75 +2888,6 @@ function updateOrderButton() {
     if (orderText && orderIcon) {
         orderText.textContent = episodesReversed ? '正序排列' : '倒序排列';
         orderIcon.style.transform = episodesReversed ? 'rotate(180deg)' : '';
-    }
-}
-
-// 设置 ArtPlayer 进度条准确点击处理
-function setupProgressBarPreciseClicks() {
-    const progressBar = document.querySelector('#player .art-control-progress') ||
-        document.querySelector('#player .art-progress');
-    if (!progressBar || !art || !art.video) return;
-
-    // 移除可能存在的旧事件监听器
-    progressBar.removeEventListener('mousedown', handleProgressBarClick);
-
-    // 添加新的事件监听器
-    progressBar.addEventListener('mousedown', handleProgressBarClick);
-
-    // 在移动端也添加触摸事件支持
-    progressBar.removeEventListener('touchstart', handleProgressBarTouch);
-    progressBar.addEventListener('touchstart', handleProgressBarTouch);
-
-    // 处理进度条点击
-    function handleProgressBarClick(e) {
-        if (!art || !art.video) return;
-
-        // 计算点击位置相对于进度条的比例
-        const rect = e.currentTarget.getBoundingClientRect();
-        const percentage = (e.clientX - rect.left) / rect.width;
-
-        // 计算点击位置对应的视频时间
-        const duration = art.video.duration;
-        let clickTime = percentage * duration;
-
-        // 处理视频接近结尾的情况
-        if (duration - clickTime < 1) {
-            // 如果点击位置非常接近结尾，稍微往前移一点
-            clickTime = Math.min(clickTime, duration - 1.5);
-
-        }
-
-        // 记录用户点击的位置
-        userClickedPosition = clickTime;
-
-        // 阻止事件冒泡后直接使用 ArtPlayer seek，避免接近片尾时误跳到结束状态
-        e.stopPropagation();
-
-        // 直接设置视频时间
-        art.seek(clickTime);
-    }
-
-    // 处理移动端触摸事件
-    function handleProgressBarTouch(e) {
-        if (!art || !art.video || !e.touches[0]) return;
-
-        const touch = e.touches[0];
-        const rect = e.currentTarget.getBoundingClientRect();
-        const percentage = (touch.clientX - rect.left) / rect.width;
-
-        const duration = art.video.duration;
-        let clickTime = percentage * duration;
-
-        // 处理视频接近结尾的情况
-        if (duration - clickTime < 1) {
-            clickTime = Math.min(clickTime, duration - 1.5);
-        }
-
-        // 记录用户点击的位置
-        userClickedPosition = clickTime;
-
-        e.stopPropagation();
-        art.seek(clickTime);
     }
 }
 
@@ -3046,8 +3008,8 @@ function showPositionRestoreHint(position) {
     `;
 
     // 添加到播放器容器
-    const playerContainer = document.querySelector('.player-container'); // Ensure this selector is correct
-    if (playerContainer) { // Check if playerContainer exists
+    const playerContainer = art?.template?.$player || document.getElementById('player');
+    if (playerContainer) {
         playerContainer.appendChild(hint);
     } else {
         return; // Exit if container not found
@@ -3339,7 +3301,7 @@ function renderResourceInfoBar() {
         resourceName = API_SITES[currentSource].name;
     }
     if (resourceName === currentSource) {
-        const customAPIs = JSON.parse(localStorage.getItem('customAPIs') || '[]');
+        const customAPIs = readStoredList('customAPIs', []);
         const customIndex = parseInt(currentSource.replace('custom_', ''), 10);
         if (customAPIs[customIndex]) {
             resourceName = customAPIs[customIndex].name || '自定义资源';
