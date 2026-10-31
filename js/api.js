@@ -615,9 +615,10 @@ async function handleMultipleCustomSearch(searchQuery, customApiUrls) {
     const originalFetch = window.fetch;
     
     window.fetch = async function(input, init) {
-        const requestUrl = typeof input === 'string' ? new URL(input, window.location.origin) : input.url;
-        
-        if (requestUrl.pathname.startsWith('/api/')) {
+        const requestUrl = new URL(typeof Request !== 'undefined' && input instanceof Request ? input.url : String(input), window.location.origin);
+
+        // Only this site's own /api/ paths: other sites' APIs (e.g. pcw-api.iq.com/api/…) pass through.
+        if (requestUrl.origin === window.location.origin && requestUrl.pathname.startsWith('/api/')) {
             if (window.isPasswordProtected && window.isPasswordVerified) {
                 if (window.isPasswordProtected() && !window.isPasswordVerified()) {
                     return;

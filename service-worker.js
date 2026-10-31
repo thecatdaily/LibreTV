@@ -1,4 +1,4 @@
-const APP_VERSION = '202610281330';
+const APP_VERSION = '202610311400';
 const APP_SHELL_CACHE = `libretv-shell-${APP_VERSION}`;
 const OFFLINE_URL = '/offline.html';
 
@@ -49,6 +49,7 @@ const APP_SHELL_ASSETS = [
   '/js/player-stats.js',
   '/js/player-download.js',
   '/js/video-enhance.js',
+  '/js/danmaku.js',
   '/js/player.js',
   '/js/cast-receiver.js',
   '/js/diagnostics.js',
@@ -59,6 +60,7 @@ const APP_SHELL_ASSETS = [
   '/libs/sha256.min.js',
   '/libs/hls.min.js',
   '/libs/artplayer.min.js',
+  '/libs/artplayer-plugin-danmuku.js',
   '/image/logo.png',
   '/image/logo-black.png',
   '/image/icon-192.png',
